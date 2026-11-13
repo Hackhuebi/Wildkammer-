@@ -1,0 +1,1030 @@
+# Wird vom Wildkammer-Add-on verwaltet und bei jedem Update überschrieben.
+# Eigene Änderungen bitte nicht hier, sondern in einer anderen Datei machen.
+# =====================================================================
+# Wildkammer: Sprachbefehl -> Add-on -> Etikett auf dem B1
+# Ablegen unter /config/packages/wildetikett.yaml
+# Eingetragen sind die IP 192.168.178.60 und dein Drucker.
+# =====================================================================
+
+wildetikett:
+  rest_command:
+    wild_art:
+      url: http://192.168.178.60:8099/api/wildart
+      method: POST
+      content_type: application/json
+      payload: '{"art": "{{ art }}"}'
+    wild_neues_stueck:
+      url: http://192.168.178.60:8099/api/neues-stueck
+      method: POST
+    wild_anlegen:
+      url: http://192.168.178.60:8099/api/anlegen
+      method: POST
+      content_type: application/json
+      payload: '{"teil": "{{ teil }}", "gewicht_g": {{ gewicht_g | default(0) | int(0) }}}'
+    wild_gedruckt:
+      url: "http://192.168.178.60:8099/api/gedruckt/{{ nummer | int }}"
+      method: POST
+    wild_letztes:
+      url: http://192.168.178.60:8099/api/letztes
+      method: GET
+    wild_storno:
+      url: http://192.168.178.60:8099/api/storno
+      method: POST
+    wild_eingabe:
+      url: http://192.168.178.60:8099/api/eingabe
+      method: POST
+      content_type: application/json
+      payload: '{"gewicht": {{ gewicht | default("") | string | to_json }}, "menge": {{ menge | default("") | string | to_json }}}'
+    wild_status:
+      url: http://192.168.178.60:8099/api/status
+      method: GET
+    wild_bestand:
+      url: "http://192.168.178.60:8099/api/bestand?teil={{ teil | default('') | urlencode }}"
+      method: GET
+
+  script:
+    # ---------- Bausteine ----------
+    wild_etikett_rendern:
+      alias: "Wild: Etikett rendern"
+      mode: queued
+      max: 20
+      fields:
+        e: { description: "Etikettendaten aus dem Add-on" }
+      sequence:
+        - action: niimbot.print
+          target:
+            device_id: 9cea996fbc0962ebe6d27af33baf87e9
+          data:
+            width: 384
+            height: 240
+            density: 3
+            payload:
+              - type: text
+                value: "{{ e.art }}"
+                x: 8
+                "y": 8
+                size: 32
+              - type: text
+                value: "{{ e.teil }}"
+                x: 8
+                "y": 70
+                # Lange Wörter kleiner, damit sie nicht in den QR-Code laufen.
+                size: "{{ 46 if e.teil | length <= 8 else 34 }}"
+              # Bleibt leer, wenn kein Gewicht genannt wurde.
+              - type: text
+                value: "{{ e.gewicht_text }}"
+                x: 8
+                "y": 134
+                size: 26
+              - type: text
+                value: "{{ e.code }}"
+                x: 8
+                "y": 204
+                size: 24
+              - type: qrcode
+                data: "http://192.168.178.60:8099/s/{{ e.nummer }}"
+                x: 236
+                "y": 44
+                boxsize: 4
+                border: 4
+                eclevel: m
+              - type: text
+                value: "{{ e.datum }}"
+                x: 244
+                "y": 204
+                size: 24
+        - variables:
+            fertig:
+              gedruckt: true
+        - stop: "Gedruckt"
+          response_variable: fertig
+
+    # ---------- Für die Routinen ----------
+    wild_drucken:
+      alias: "Wild: Etikett drucken und einbuchen"
+      mode: queued
+      max: 20
+      fields:
+        teil: { description: "Teilstück" }
+      sequence:
+        - action: rest_command.wild_anlegen
+          data:
+            teil: "{{ teil }}"
+          response_variable: antwort
+        - if: "{{ not antwort.content.ok }}"
+          then:
+            # Ohne Wildart kommt die Rückmeldung als Etikett.
+            - action: niimbot.print
+              target:
+                device_id: 9cea996fbc0962ebe6d27af33baf87e9
+              data:
+                width: 384
+                height: 240
+                density: 3
+                payload:
+                  - type: text
+                    value: "WILDART"
+                    x: 20
+                    "y": 50
+                    size: 60
+                  - type: text
+                    value: "FEHLT"
+                    x: 20
+                    "y": 125
+                    size: 60
+            - stop: "Keine Wildart gesetzt"
+        # Der B1 meldet manchmal einen Fehler, obwohl gedruckt wurde: trotzdem einbuchen.
+        - action: script.wild_etikett_rendern
+          data:
+            e: "{{ antwort.content }}"
+          continue_on_error: true
+        - action: rest_command.wild_gedruckt
+          data:
+            nummer: "{{ antwort.content.nummer }}"
+
+    wild_neues_stueck:
+      alias: "Etikett neues Stück"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_neues_stueck
+
+    wild_storno:
+      alias: "Etikett Storno"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_storno
+
+    wild_nochmal:
+      alias: "Etikett nochmal"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_letztes
+          response_variable: antwort
+        - condition: "{{ antwort.content.ok }}"
+        - action: script.wild_etikett_rendern
+          data:
+            e: "{{ antwort.content }}"
+
+    # ---------- Für Assist: Diese Skripte melden das Ergebnis zurück ----------
+    wild_sprache_etikett:
+      alias: "Wild-Sprache: Etikett"
+      mode: queued
+      max: 20
+      fields:
+        teil: { description: "Teilstück" }
+        gewicht_g: { description: "Gramm, optional" }
+        anzahl: { description: "Anzahl gleicher Tüten" }
+        wildart: { description: "Wildart, optional, z. B. Reh, Reh Bock oder Schwarzwild Frili. Setzt die aktive Wildart vor dem Druck." }
+      sequence:
+        - if: "{{ wildart | default('') | trim != '' }}"
+          then:
+            - action: rest_command.wild_art
+              data:
+                art: "{{ wildart | trim }}"
+        - repeat:
+            count: "{{ anzahl | default(1) | int(1) }}"
+            sequence:
+              - action: rest_command.wild_anlegen
+                data:
+                  teil: "{{ teil }}"
+                  gewicht_g: "{{ gewicht_g | default(0) | int(0) }}"
+                response_variable: antwort
+              - if: "{{ not antwort.content.ok }}"
+                then:
+                  - variables:
+                      ergebnis: "{{ antwort.content }}"
+                  - stop: "Abgelehnt"
+                    response_variable: ergebnis
+              - variables:
+                  druck:
+                    gedruckt: false
+              # Der B1 meldet manchmal einen Fehler, obwohl das Etikett gedruckt wurde.
+              # Darum wird trotzdem eingebucht und der Fehler nur angesagt. Kam nichts: "Storno".
+              - action: script.wild_etikett_rendern
+                data:
+                  e: "{{ antwort.content }}"
+                response_variable: druck
+                continue_on_error: true
+              - action: rest_command.wild_gedruckt
+                data:
+                  nummer: "{{ antwort.content.nummer }}"
+              - if: "{{ repeat.last }}"
+                then:
+                  - variables:
+                      ergebnis: "{{ dict(antwort.content, druck_unsicher=(not druck.gedruckt)) }}"
+                  - stop: "Fertig"
+                    response_variable: ergebnis
+
+    wild_sprache_art:
+      alias: "Wild-Sprache: Wildart"
+      mode: queued
+      fields:
+        art: { description: "Wildart" }
+      sequence:
+        - action: rest_command.wild_art
+          data:
+            art: "{{ art }}"
+          response_variable: antwort
+        - variables:
+            ergebnis: "{{ antwort.content }}"
+        - stop: "Fertig"
+          response_variable: ergebnis
+
+    wild_sprache_neues_stueck:
+      alias: "Wild-Sprache: Neues Stück"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_neues_stueck
+          response_variable: antwort
+        - variables:
+            ergebnis: "{{ antwort.content }}"
+        - stop: "Fertig"
+          response_variable: ergebnis
+
+    wild_sprache_storno:
+      alias: "Wild-Sprache: Storno"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_storno
+          response_variable: antwort
+        - variables:
+            ergebnis: "{{ antwort.content }}"
+        - stop: "Fertig"
+          response_variable: ergebnis
+
+    wild_sprache_status:
+      alias: "Wild-Sprache: Status"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_status
+          response_variable: antwort
+        - variables:
+            ergebnis: "{{ antwort.content }}"
+        - stop: "Fertig"
+          response_variable: ergebnis
+
+    wild_sprache_bestand:
+      alias: "Wild-Sprache: Bestand"
+      mode: queued
+      fields:
+        teil: { description: "Teilstück, optional" }
+      sequence:
+        - action: rest_command.wild_bestand
+          data:
+            teil: "{{ teil | default('') }}"
+          response_variable: antwort
+        - variables:
+            ergebnis: "{{ antwort.content }}"
+        - stop: "Fertig"
+          response_variable: ergebnis
+
+    wild_sprache_nochmal:
+      alias: "Wild-Sprache: Nochmal"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_letztes
+          response_variable: antwort
+        - if: "{{ not antwort.content.ok }}"
+          then:
+            - variables:
+                ergebnis: "{{ antwort.content }}"
+            - stop: "Nichts vorhanden"
+              response_variable: ergebnis
+        - variables:
+            druck:
+              gedruckt: false
+        - action: script.wild_etikett_rendern
+          data:
+            e: "{{ antwort.content }}"
+          response_variable: druck
+          continue_on_error: true
+        - variables:
+            ergebnis: >-
+              {{ antwort.content if druck.gedruckt else {'ok': false, 'fehler': 'druck'} }}
+        - stop: "Fertig"
+          response_variable: ergebnis
+
+    # ---------- Wildarten für Routinen ----------
+    wild_art_schwarzwild:
+      alias: "Wildart Schwarzwild"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_art
+          data:
+            art: "Schwarzwild"
+    wild_art_reh:
+      alias: "Wildart Reh"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_art
+          data:
+            art: "Reh"
+    wild_art_rotwild:
+      alias: "Wildart Rotwild"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_art
+          data:
+            art: "Rotwild"
+    wild_art_damwild:
+      alias: "Wildart Damwild"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_art
+          data:
+            art: "Damwild"
+    wild_art_muffelwild:
+      alias: "Wildart Muffelwild"
+      mode: queued
+      sequence:
+        - action: rest_command.wild_art
+          data:
+            art: "Muffelwild"
+
+    # ---------- Teilstücke für Routinen ----------
+    wild_teil_braten:
+      alias: "Etikett Braten"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Braten"
+    wild_teil_keule:
+      alias: "Etikett Keule"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Keule"
+    wild_teil_ruecken:
+      alias: "Etikett Rücken"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Rücken"
+    wild_teil_filet:
+      alias: "Etikett Filet"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Filet"
+    wild_teil_blatt:
+      alias: "Etikett Blatt"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Blatt"
+    wild_teil_nacken:
+      alias: "Etikett Nacken"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Nacken"
+    wild_teil_rippen:
+      alias: "Etikett Rippen"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Rippen"
+    wild_teil_gulasch:
+      alias: "Etikett Gulasch"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Gulasch"
+    wild_teil_ragout:
+      alias: "Etikett Ragout"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Ragout"
+    wild_teil_hack:
+      alias: "Etikett Hack"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Hack"
+    wild_teil_wurstfleisch:
+      alias: "Etikett Wurstfleisch"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Wurstfleisch"
+    wild_teil_knochen:
+      alias: "Etikett Knochen"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Knochen"
+    wild_teil_leber:
+      alias: "Etikett Leber"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Leber"
+    wild_teil_herz:
+      alias: "Etikett Herz"
+      mode: queued
+      max: 20
+      sequence:
+        - action: script.wild_drucken
+          data:
+            teil: "Herz"
+
+  automation:
+    - id: wild_sprache_wildart
+      alias: "Wild-Sprache: Wildart"
+      mode: queued
+      triggers:
+        - trigger: conversation
+          id: "Schwarzwild"
+          command:
+            - "[wildart] (schwarzwild|wildschwein|sau)"
+        - trigger: conversation
+          id: "Reh"
+          command:
+            - "[wildart] (reh|re|rehwild)"
+        - trigger: conversation
+          id: "Rotwild"
+          command:
+            - "[wildart] (rotwild|hirsch)"
+        - trigger: conversation
+          id: "Damwild"
+          command:
+            - "[wildart] (damwild|damhirsch)"
+        - trigger: conversation
+          id: "Muffelwild"
+          command:
+            - "[wildart] (muffelwild|mufflon)"
+        - trigger: conversation
+          id: "Reh Bock"
+          command:
+            - "[wildart] [(reh|re)] bock"
+        - trigger: conversation
+          id: "Reh Ricke"
+          command:
+            - "[wildart] [(reh|re)] ricke"
+        - trigger: conversation
+          id: "Reh Kitz"
+          command:
+            - "[wildart] [(reh|re)] (kitz|kids|rehkitz)"
+        - trigger: conversation
+          id: "Schwarzwild Frili"
+          command:
+            - "[wildart] [schwarzwild] (frischling|frieli|frili)"
+        - trigger: conversation
+          id: "Schwarzwild Bache"
+          command:
+            - "[wildart] [schwarzwild] bache"
+        - trigger: conversation
+          id: "Schwarzwild Keiler"
+          command:
+            - "[wildart] [schwarzwild] (keiler|keile)"
+      actions:
+        - action: script.wild_sprache_art
+          data:
+            art: "{{ trigger.id }}"
+          response_variable: r
+        - set_conversation_response: >-
+            {% if r.ok and r.neu %}{{ trigger.id }}.
+            {%- elif r.ok %}{{ trigger.id }} bleibt aktiv.
+            {%- else %}Das hat nicht geklappt.{% endif %}
+
+    - id: wild_sprache_etikett
+      alias: "Wild-Sprache: Etikett"
+      mode: queued
+      max: 20
+      triggers:
+        - trigger: conversation
+          id: "Braten"
+          command:
+            - "[etikett] braten"
+            - "[etikett] braten {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] braten"
+            - "(drucke|druck) [ein] [etikett] [für] braten {gewicht}"
+        - trigger: conversation
+          id: "Braten#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] braten"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] braten {gewicht}"
+        - trigger: conversation
+          id: "Braten#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] braten"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] braten {gewicht}"
+        - trigger: conversation
+          id: "Keule"
+          command:
+            - "[etikett] (keule|schlegel)"
+            - "[etikett] (keule|schlegel) {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] (keule|schlegel)"
+            - "(drucke|druck) [ein] [etikett] [für] (keule|schlegel) {gewicht}"
+        - trigger: conversation
+          id: "Keule#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (keule|schlegel)"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (keule|schlegel) {gewicht}"
+        - trigger: conversation
+          id: "Keule#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (keule|schlegel)"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (keule|schlegel) {gewicht}"
+        - trigger: conversation
+          id: "Rücken"
+          command:
+            - "[etikett] rücken"
+            - "[etikett] rücken {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] rücken"
+            - "(drucke|druck) [ein] [etikett] [für] rücken {gewicht}"
+        - trigger: conversation
+          id: "Rücken#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] rücken"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] rücken {gewicht}"
+        - trigger: conversation
+          id: "Rücken#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] rücken"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] rücken {gewicht}"
+        - trigger: conversation
+          id: "Filet"
+          command:
+            - "[etikett] (filet|lende)"
+            - "[etikett] (filet|lende) {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] (filet|lende)"
+            - "(drucke|druck) [ein] [etikett] [für] (filet|lende) {gewicht}"
+        - trigger: conversation
+          id: "Filet#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (filet|lende)"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (filet|lende) {gewicht}"
+        - trigger: conversation
+          id: "Filet#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (filet|lende)"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (filet|lende) {gewicht}"
+        - trigger: conversation
+          id: "Blatt"
+          command:
+            - "[etikett] (blatt|schulter)"
+            - "[etikett] (blatt|schulter) {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] (blatt|schulter)"
+            - "(drucke|druck) [ein] [etikett] [für] (blatt|schulter) {gewicht}"
+        - trigger: conversation
+          id: "Blatt#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (blatt|schulter)"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (blatt|schulter) {gewicht}"
+        - trigger: conversation
+          id: "Blatt#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (blatt|schulter)"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (blatt|schulter) {gewicht}"
+        - trigger: conversation
+          id: "Nacken"
+          command:
+            - "[etikett] nacken"
+            - "[etikett] nacken {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] nacken"
+            - "(drucke|druck) [ein] [etikett] [für] nacken {gewicht}"
+        - trigger: conversation
+          id: "Nacken#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] nacken"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] nacken {gewicht}"
+        - trigger: conversation
+          id: "Nacken#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] nacken"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] nacken {gewicht}"
+        - trigger: conversation
+          id: "Rippen"
+          command:
+            - "[etikett] (rippen|rippchen)"
+            - "[etikett] (rippen|rippchen) {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] (rippen|rippchen)"
+            - "(drucke|druck) [ein] [etikett] [für] (rippen|rippchen) {gewicht}"
+        - trigger: conversation
+          id: "Rippen#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (rippen|rippchen)"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (rippen|rippchen) {gewicht}"
+        - trigger: conversation
+          id: "Rippen#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (rippen|rippchen)"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (rippen|rippchen) {gewicht}"
+        - trigger: conversation
+          id: "Gulasch"
+          command:
+            - "[etikett] gulasch"
+            - "[etikett] gulasch {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] gulasch"
+            - "(drucke|druck) [ein] [etikett] [für] gulasch {gewicht}"
+        - trigger: conversation
+          id: "Gulasch#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] gulasch"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] gulasch {gewicht}"
+        - trigger: conversation
+          id: "Gulasch#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] gulasch"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] gulasch {gewicht}"
+        - trigger: conversation
+          id: "Ragout"
+          command:
+            - "[etikett] ragout"
+            - "[etikett] ragout {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] ragout"
+            - "(drucke|druck) [ein] [etikett] [für] ragout {gewicht}"
+        - trigger: conversation
+          id: "Ragout#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] ragout"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] ragout {gewicht}"
+        - trigger: conversation
+          id: "Ragout#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] ragout"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] ragout {gewicht}"
+        - trigger: conversation
+          id: "Hack"
+          command:
+            - "[etikett] (hack|hackfleisch|gehacktes)"
+            - "[etikett] (hack|hackfleisch|gehacktes) {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] (hack|hackfleisch|gehacktes)"
+            - "(drucke|druck) [ein] [etikett] [für] (hack|hackfleisch|gehacktes) {gewicht}"
+        - trigger: conversation
+          id: "Hack#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (hack|hackfleisch|gehacktes)"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (hack|hackfleisch|gehacktes) {gewicht}"
+        - trigger: conversation
+          id: "Hack#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (hack|hackfleisch|gehacktes)"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (hack|hackfleisch|gehacktes) {gewicht}"
+        - trigger: conversation
+          id: "Wurstfleisch"
+          command:
+            - "[etikett] wurstfleisch"
+            - "[etikett] wurstfleisch {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] wurstfleisch"
+            - "(drucke|druck) [ein] [etikett] [für] wurstfleisch {gewicht}"
+        - trigger: conversation
+          id: "Wurstfleisch#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] wurstfleisch"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] wurstfleisch {gewicht}"
+        - trigger: conversation
+          id: "Wurstfleisch#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] wurstfleisch"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] wurstfleisch {gewicht}"
+        - trigger: conversation
+          id: "Knochen"
+          command:
+            - "[etikett] knochen"
+            - "[etikett] knochen {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] knochen"
+            - "(drucke|druck) [ein] [etikett] [für] knochen {gewicht}"
+        - trigger: conversation
+          id: "Knochen#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] knochen"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] knochen {gewicht}"
+        - trigger: conversation
+          id: "Knochen#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] knochen"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] knochen {gewicht}"
+        - trigger: conversation
+          id: "Leber"
+          command:
+            - "[etikett] leber"
+            - "[etikett] leber {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] leber"
+            - "(drucke|druck) [ein] [etikett] [für] leber {gewicht}"
+        - trigger: conversation
+          id: "Leber#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] leber"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] leber {gewicht}"
+        - trigger: conversation
+          id: "Leber#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] leber"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] leber {gewicht}"
+        - trigger: conversation
+          id: "Herz"
+          command:
+            - "[etikett] herz"
+            - "[etikett] herz {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] herz"
+            - "(drucke|druck) [ein] [etikett] [für] herz {gewicht}"
+        - trigger: conversation
+          id: "Herz#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] herz"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] herz {gewicht}"
+        - trigger: conversation
+          id: "Herz#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] herz"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] herz {gewicht}"
+        - trigger: conversation
+          id: "Bauch"
+          command:
+            - "[etikett] bauch"
+            - "[etikett] bauch {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] bauch"
+            - "(drucke|druck) [ein] [etikett] [für] bauch {gewicht}"
+        - trigger: conversation
+          id: "Bauch#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] bauch"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] bauch {gewicht}"
+        - trigger: conversation
+          id: "Bauch#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] bauch"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] bauch {gewicht}"
+        - trigger: conversation
+          id: "Oberschale"
+          command:
+            - "[etikett] oberschale"
+            - "[etikett] oberschale {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] oberschale"
+            - "(drucke|druck) [ein] [etikett] [für] oberschale {gewicht}"
+        - trigger: conversation
+          id: "Oberschale#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] oberschale"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] oberschale {gewicht}"
+        - trigger: conversation
+          id: "Oberschale#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] oberschale"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] oberschale {gewicht}"
+        - trigger: conversation
+          id: "Unterschale"
+          command:
+            - "[etikett] unterschale"
+            - "[etikett] unterschale {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] unterschale"
+            - "(drucke|druck) [ein] [etikett] [für] unterschale {gewicht}"
+        - trigger: conversation
+          id: "Unterschale#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] unterschale"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] unterschale {gewicht}"
+        - trigger: conversation
+          id: "Unterschale#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] unterschale"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] unterschale {gewicht}"
+        - trigger: conversation
+          id: "Nuss"
+          command:
+            - "[etikett] (nuss|nuß)"
+            - "[etikett] (nuss|nuß) {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] (nuss|nuß)"
+            - "(drucke|druck) [ein] [etikett] [für] (nuss|nuß) {gewicht}"
+        - trigger: conversation
+          id: "Nuss#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (nuss|nuß)"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (nuss|nuß) {gewicht}"
+        - trigger: conversation
+          id: "Nuss#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (nuss|nuß)"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (nuss|nuß) {gewicht}"
+        - trigger: conversation
+          id: "Hüfte"
+          command:
+            - "[etikett] (hüfte|huefte)"
+            - "[etikett] (hüfte|huefte) {gewicht}"
+            - "(drucke|druck) [ein] [etikett] [für] (hüfte|huefte)"
+            - "(drucke|druck) [ein] [etikett] [für] (hüfte|huefte) {gewicht}"
+        - trigger: conversation
+          id: "Hüfte#menge"
+          command:
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (hüfte|huefte)"
+            - "(2|3|4|5|6|7|8|9|10|2x|3x|4x|5x|6x|7x|8x|9x|10x|2mal|3mal|4mal|5mal|6mal|7mal|8mal|9mal|10mal|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|zweimal|dreimal|viermal|fünfmal|sechsmal|siebenmal|achtmal|neunmal|zehnmal) [mal] (hüfte|huefte) {gewicht}"
+        - trigger: conversation
+          id: "Hüfte#drucke"
+          command:
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (hüfte|huefte)"
+            - "(drucke|druck) (2|3|4|5|6|7|8|9|10|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn) (etikett|etiketten) [für] (hüfte|huefte) {gewicht}"
+      actions:
+        - action: rest_command.wild_eingabe
+          data:
+            gewicht: "{{ trigger.slots.gewicht | default('') }}"
+            # Bei "drucke 5 etiketten" steht die Menge im zweiten Wort, sonst im ersten.
+            menge: >-
+              {% set w = trigger.sentence.split(' ') %}
+              {{ w[1] if '#drucke' in trigger.id else w[0] if '#menge' in trigger.id else '' }}
+          response_variable: eingabe
+        - if: "{{ not eingabe.content.ok }}"
+          then:
+            - set_conversation_response: >-
+                {% if eingabe.content.fehler == 'gewicht_ungueltig' %}Das Gewicht habe ich nicht verstanden.
+                {%- elif eingabe.content.fehler == 'menge_ungueltig' %}Die Menge habe ich nicht verstanden.
+                {%- else %}Die Wildkammer hat einen Fehler gemeldet.{% endif %} Es wurde nichts gedruckt.
+            - stop: "Eingabe nicht verstanden"
+        - action: script.wild_sprache_etikett
+          data:
+            teil: "{{ trigger.id.split('#')[0] }}"
+            gewicht_g: "{{ eingabe.content.gewicht_g }}"
+            anzahl: "{{ eingabe.content.anzahl }}"
+          response_variable: r
+        - set_conversation_response: >-
+            {% if r.ok %}
+            {%- if eingabe.content.anzahl > 1 %}{{ eingabe.content.anzahl }} mal {% endif -%}
+            {{ trigger.id.split('#')[0] }}
+            {%- set g = eingabe.content.gewicht_g %}
+            {%- if g and g < 1000 %}, {{ g }} Gramm
+            {%- elif g %}, {{ (g / 1000) | string | replace('.', ',') }} Kilo{% endif %}, {{ r.art }}.
+            {%- if r.druck_unsicher %} Der Drucker hat einen Fehler gemeldet, eingebucht ist es trotzdem. Kam kein Etikett, sag Storno.{% endif %}
+            {%- elif r.fehler == 'wildart_fehlt' %}Erst die Wildart sagen.
+            {%- elif r.fehler == 'druck' %}Der Drucker hat nicht gedruckt. Bitte prüfen und noch einmal sagen.
+            {%- else %}Das hat nicht geklappt.{% endif %}
+
+    - id: wild_sprache_bestand
+      alias: "Wild-Sprache: Bestand"
+      mode: queued
+      triggers:
+        - trigger: conversation
+          id: alle
+          command:
+            - "(was|wie viel) [ist] [habe ich] noch da"
+            - "wie viel [fleisch] habe ich noch"
+            - "gesamtbestand"
+        - trigger: conversation
+          id: "Braten"
+          command:
+            - "wie viel braten [habe ich] [ist] [noch] [da]"
+            - "bestand braten"
+        - trigger: conversation
+          id: "Keule"
+          command:
+            - "wie viel (keule|schlegel) [habe ich] [ist] [noch] [da]"
+            - "bestand (keule|schlegel)"
+        - trigger: conversation
+          id: "Rücken"
+          command:
+            - "wie viel rücken [habe ich] [ist] [noch] [da]"
+            - "bestand rücken"
+        - trigger: conversation
+          id: "Filet"
+          command:
+            - "wie viel (filet|lende) [habe ich] [ist] [noch] [da]"
+            - "bestand (filet|lende)"
+        - trigger: conversation
+          id: "Blatt"
+          command:
+            - "wie viel (blatt|schulter) [habe ich] [ist] [noch] [da]"
+            - "bestand (blatt|schulter)"
+        - trigger: conversation
+          id: "Nacken"
+          command:
+            - "wie viel nacken [habe ich] [ist] [noch] [da]"
+            - "bestand nacken"
+        - trigger: conversation
+          id: "Rippen"
+          command:
+            - "wie viel (rippen|rippchen) [habe ich] [ist] [noch] [da]"
+            - "bestand (rippen|rippchen)"
+        - trigger: conversation
+          id: "Gulasch"
+          command:
+            - "wie viel gulasch [habe ich] [ist] [noch] [da]"
+            - "bestand gulasch"
+        - trigger: conversation
+          id: "Ragout"
+          command:
+            - "wie viel ragout [habe ich] [ist] [noch] [da]"
+            - "bestand ragout"
+        - trigger: conversation
+          id: "Hack"
+          command:
+            - "wie viel (hack|hackfleisch|gehacktes) [habe ich] [ist] [noch] [da]"
+            - "bestand (hack|hackfleisch|gehacktes)"
+        - trigger: conversation
+          id: "Wurstfleisch"
+          command:
+            - "wie viel wurstfleisch [habe ich] [ist] [noch] [da]"
+            - "bestand wurstfleisch"
+        - trigger: conversation
+          id: "Knochen"
+          command:
+            - "wie viel knochen [habe ich] [ist] [noch] [da]"
+            - "bestand knochen"
+        - trigger: conversation
+          id: "Leber"
+          command:
+            - "wie viel leber [habe ich] [ist] [noch] [da]"
+            - "bestand leber"
+        - trigger: conversation
+          id: "Herz"
+          command:
+            - "wie viel herz [habe ich] [ist] [noch] [da]"
+            - "bestand herz"
+        - trigger: conversation
+          id: "Bauch"
+          command:
+            - "wie viel bauch [habe ich] [ist] [noch] [da]"
+            - "bestand bauch"
+        - trigger: conversation
+          id: "Oberschale"
+          command:
+            - "wie viel oberschale [habe ich] [ist] [noch] [da]"
+            - "bestand oberschale"
+        - trigger: conversation
+          id: "Unterschale"
+          command:
+            - "wie viel unterschale [habe ich] [ist] [noch] [da]"
+            - "bestand unterschale"
+        - trigger: conversation
+          id: "Nuss"
+          command:
+            - "wie viel (nuss|nuß) [habe ich] [ist] [noch] [da]"
+            - "bestand (nuss|nuß)"
+        - trigger: conversation
+          id: "Hüfte"
+          command:
+            - "wie viel (hüfte|huefte) [habe ich] [ist] [noch] [da]"
+            - "bestand (hüfte|huefte)"
+      actions:
+        - action: script.wild_sprache_bestand
+          data:
+            teil: "{{ '' if trigger.id == 'alle' else trigger.id }}"
+          response_variable: r
+        - set_conversation_response: "{{ r.text if r.ok else 'Das hat nicht geklappt.' }}"
+
+    - id: wild_sprache_befehle
+      alias: "Wild-Sprache: Storno, nochmal, neues Stück"
+      mode: queued
+      triggers:
+        - trigger: conversation
+          id: storno
+          command:
+            - "storno"
+            - "(stornieren|das war falsch)"
+        - trigger: conversation
+          id: nochmal
+          command:
+            - "(nochmal|noch mal|wiederholen)"
+            - "nochmal drucken"
+        - trigger: conversation
+          id: neues_stueck
+          command:
+            - "(neues|nächstes) (stück|tier)"
+      actions:
+        - choose:
+            - conditions: "{{ trigger.id == 'storno' }}"
+              sequence:
+                - action: script.wild_sprache_storno
+                  response_variable: r
+                - set_conversation_response: >-
+                    {{ r.code ~ ' storniert. Etikett wegwerfen.' if r.ok else 'Dafür gibt es gerade kein passendes Etikett.' }}
+            - conditions: "{{ trigger.id == 'nochmal' }}"
+              sequence:
+                - action: script.wild_sprache_nochmal
+                  response_variable: r
+                - set_conversation_response: >-
+                    {% if r.ok %}{{ r.teil }} nochmal.
+                    {%- elif r.fehler == 'druck' %}Der Drucker hat nicht gedruckt.
+                    {%- else %}Dafür gibt es gerade kein passendes Etikett.{% endif %}
+            - conditions: "{{ trigger.id == 'neues_stueck' }}"
+              sequence:
+                - action: script.wild_sprache_neues_stueck
+                  response_variable: r
+                - set_conversation_response: >-
+                    {{ 'Stück ' ~ r.stueck ~ ', ' ~ r.art ~ '.' if r.ok else 'Erst die Wildart sagen.' }}

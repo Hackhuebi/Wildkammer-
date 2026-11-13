@@ -1,0 +1,792 @@
+# Wird vom Wildkammer-Add-on verwaltet und bei jedem Update überschrieben.
+# Eigene Änderungen bitte nicht hier, sondern in einer anderen Datei machen.
+# =====================================================================
+# Wildkammer Verkauf: Werkzeuge für Claude (und Assist) über Home Assistant
+# Ablegen unter /config/packages/wildkammer_verkauf.yaml
+# Eingetragen sind die IP 192.168.178.60 und dein Drucker. Siehe ANLEITUNG-VERKAUF.md.
+# Nicht zusammen mit fleischmeister_wurst.yaml aus der ChatGPT-Version verwenden.
+# =====================================================================
+wildkammer_verkauf:
+  automation:
+  - id: wildkammer_wurst_sprache
+    alias: "Wildkammer: Wurstetiketten per Sprache"
+    mode: queued
+    max: 5
+    triggers:
+    - trigger: conversation
+      id: Salami
+      command:
+      - (drucke|druck) (ein|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|fünfzehn|zwanzig|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50) (etikett|etiketten|wurstetikett|wurstetiketten) [für] salami
+      - (drucke|druck) [ein] (etikett|etiketten|wurstetikett|wurstetiketten) [für] salami
+    - trigger: conversation
+      id: Jagdwurst
+      command:
+      - (drucke|druck) (ein|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|fünfzehn|zwanzig|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50) (etikett|etiketten|wurstetikett|wurstetiketten) [für] (jagdwurst|jagd wurst)
+      - (drucke|druck) [ein] (etikett|etiketten|wurstetikett|wurstetiketten) [für] (jagdwurst|jagd wurst)
+    - trigger: conversation
+      id: Knacker
+      command:
+      - (drucke|druck) (ein|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|fünfzehn|zwanzig|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50) (etikett|etiketten|wurstetikett|wurstetiketten) [für] knacker
+      - (drucke|druck) [ein] (etikett|etiketten|wurstetikett|wurstetiketten) [für] knacker
+    - trigger: conversation
+      id: Bratwurst
+      command:
+      - (drucke|druck) (ein|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|fünfzehn|zwanzig|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50) (etikett|etiketten|wurstetikett|wurstetiketten) [für] (bratwurst|bratwürste|brat wurst)
+      - (drucke|druck) [ein] (etikett|etiketten|wurstetikett|wurstetiketten) [für] (bratwurst|bratwürste|brat wurst)
+    - trigger: conversation
+      id: Pfefferbeißer 5er-Pack
+      command:
+      - (drucke|druck) (ein|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|fünfzehn|zwanzig|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50) (etikett|etiketten|wurstetikett|wurstetiketten) [für] (((pfefferbeißer|pfefferbeisser|pfeffer beißer) (5er|fünfer|5) [pack|packung])|((5er|fünfer) (pfefferbeißer|pfefferbeisser|pfeffer beißer)))
+      - (drucke|druck) [ein] (etikett|etiketten|wurstetikett|wurstetiketten) [für] (((pfefferbeißer|pfefferbeisser|pfeffer beißer) (5er|fünfer|5) [pack|packung])|((5er|fünfer) (pfefferbeißer|pfefferbeisser|pfeffer beißer)))
+    - trigger: conversation
+      id: Pfefferbeißer 10er-Pack
+      command:
+      - (drucke|druck) (ein|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|fünfzehn|zwanzig|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50) (etikett|etiketten|wurstetikett|wurstetiketten) [für] (((pfefferbeißer|pfefferbeisser|pfeffer beißer) (10er|zehner|10) [pack|packung])|((10er|zehner) (pfefferbeißer|pfefferbeisser|pfeffer beißer)))
+      - (drucke|druck) [ein] (etikett|etiketten|wurstetikett|wurstetiketten) [für] (((pfefferbeißer|pfefferbeisser|pfeffer beißer) (10er|zehner|10) [pack|packung])|((10er|zehner) (pfefferbeißer|pfefferbeisser|pfeffer beißer)))
+    - trigger: conversation
+      id: '?'
+      command:
+      - (drucke|druck) [(ein|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|fünfzehn|zwanzig|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50)] (etikett|etiketten|wurstetikett|wurstetiketten) [für] (pfefferbeißer|pfefferbeisser|pfeffer beißer)
+    actions:
+    - if: "{{ trigger.id == '?' }}"
+      then:
+      - set_conversation_response: 5er oder 10er Pfefferbeißer? Bitte nochmal mit Größe sagen.
+      - stop: Größe fehlt
+    - variables:
+        anzahl: "{% set w = trigger.sentence.lower().split(' ') %}{% set z = {'ein': 1, 'eine': 1, 'einen': 1, 'zwei': 2, 'drei': 3, 'vier': 4, 'fünf': 5, 'sechs': 6, 'sieben': 7, 'acht': 8, 'neun': 9, 'zehn': 10, 'elf': 11, 'zwölf': 12, 'fünfzehn': 15, 'zwanzig': 20} %}{{ (z.get(w[1], w[1] | int(1)) if w | length > 2 else 1) | int(1) }}"
+    - action: script.wildkammer_wurst_etiketten
+      data:
+        produkt: "{{ trigger.id }}"
+        anzahl: "{{ anzahl }}"
+      response_variable: r
+    - set_conversation_response: "{% if r.ok %}{{ r.gedruckt }} {{ 'Etikett' if r.gedruckt | int == 1 else 'Etiketten' }} {{ trigger.id }} gedruckt und eingebucht.{% if r.druck_unsicher | int > 0 %} Der Drucker hat einen Fehler gemeldet, eingebucht ist trotzdem. Fehlt ein Etikett, im Wurstlager mit Minus korrigieren.{% endif %}{% else %}Das hat nicht geklappt, es wurde nichts gebucht.{% endif %}"
+  rest_command:
+    wildkammer_verkauf:
+      url: "http://192.168.178.60:8099/api/verkauf/{{ aktion }}"
+      method: POST
+      content_type: application/json
+      payload: "{{ daten | to_json }}"
+      timeout: 20
+    wildkammer_wurst_auftrag:
+      url: "http://192.168.178.60:8099/api/wurst/druckauftrag"
+      method: POST
+      content_type: application/json
+      payload: "{\"produkt\": {{ produkt | to_json }}}"
+    wildkammer_wurst_gedruckt:
+      url: "http://192.168.178.60:8099/api/wurst/gedruckt/{{ auftrag }}"
+      method: POST
+  script:
+    wildkammer_bestand:
+      alias: Wildkammer Bestand
+      description: "Zeigt den freien Bestand der Wildkammer: Wurst und Honig (Feld art) mit Preis, Fleisch als Tüten nach Wildart und Teilstück. Frei heißt im Lager und noch nicht bestellt."
+      mode: queued
+      max: 20
+      fields:
+        suche:
+          name: suche
+          description: Optionaler Suchbegriff, z. B. 'Salami' oder 'Reh'
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: bestand
+          daten: "{{ {'suche': suche | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_kunden_suchen:
+      alias: Wildkammer Kunden suchen
+      description: Sucht Kunden nach Namen, auch bei Tippfehlern oder nur Vor- oder Nachnamen. Vor jeder Bestellung zuerst den Kunden suchen.
+      mode: queued
+      max: 20
+      fields:
+        name:
+          name: name
+          description: Name oder Namensteil
+          required: true
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: kunden_suchen
+          daten: "{{ {'name': name | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_kunde_anlegen:
+      alias: Wildkammer Kunde anlegen
+      description: Legt einen neuen Kunden an. Nur verwenden, wenn die Kundensuche keinen passenden Kunden findet und der Nutzer bestätigt hat, dass es ein neuer Kunde ist.
+      mode: queued
+      max: 20
+      fields:
+        name:
+          name: name
+          description: Vollständiger Name
+          required: true
+          selector:
+            text:
+        telefon:
+          name: telefon
+          description: Telefonnummer, optional
+          required: false
+          selector:
+            text:
+        notiz:
+          name: notiz
+          description: Notiz, optional
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: kunde_anlegen
+          daten: "{{ {'name': name | default(''), 'telefon': telefon | default(''), 'notiz': notiz | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_bestellung_anlegen:
+      alias: Wildkammer Bestellung anlegen
+      description: Legt eine Bestellung an und reserviert die Ware. Bestellt werden kann nur, was frei im Lager ist; die ganze Bestellung wird gebucht oder gar nichts. Pfefferbeißer gibt es als 5er-Pack und 10er-Pack, das muss immer klar sein. Honig gibt es als Rapshonig und Lindenhonig im 500-g-Glas, er wird wie Wurst mit produkt bestellt. Fleisch wird in Tüten bestellt (die ältesten passenden zuerst).
+      mode: queued
+      max: 20
+      fields:
+        kunde_id:
+          name: kunde_id
+          description: Kundennummer aus der Kundensuche (bevorzugt)
+          required: false
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+        kunde:
+          name: kunde
+          description: Kundenname, nur wenn er exakt einem Kunden entspricht
+          required: false
+          selector:
+            text:
+        positionen:
+          name: positionen
+          description: "JSON-Liste. Wurst: {\"produkt\": \"Salami\", \"menge\": 2}. Fleisch: {\"wildart\": \"Reh\", \"teil\": \"Rücken\", \"menge\": 1}. Beispiel: [{\"produkt\": \"Pfefferbeißer 10er-Pack\", \"menge\": 1}, {\"wildart\": \"Schwarzwild\", \"teil\": \"Keule\", \"menge\": 2}]"
+          required: true
+          selector:
+            text:
+              multiline: true
+        notiz:
+          name: notiz
+          description: Notiz zur Bestellung, optional
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: bestellung_anlegen
+          daten: "{{ {'kunde_id': kunde_id | default(''), 'kunde': kunde | default(''), 'positionen': positionen | default(''), 'notiz': notiz | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_bestellungen:
+      alias: Wildkammer Bestellungen
+      description: "Listet Bestellungen mit Positionen, Summe, bezahlt und offen. Filter: offen (Standard, alles was noch nicht bezahlt oder nicht ausgeliefert ist), unbezahlt, nicht_ausgeliefert, abgeschlossen oder alle."
+      mode: queued
+      max: 20
+      fields:
+        filter:
+          name: filter
+          description: offen, unbezahlt, nicht_ausgeliefert, abgeschlossen (bezahlt und geliefert) oder alle
+          required: false
+          selector:
+            select:
+              options:
+              - offen
+              - unbezahlt
+              - nicht_ausgeliefert
+              - abgeschlossen
+              - alle
+        kunde:
+          name: kunde
+          description: Nur Bestellungen dieses Kunden, optional
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: bestellungen
+          daten: "{{ {'filter': filter | default(''), 'kunde': kunde | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_bezahlt:
+      alias: Wildkammer Zahlung buchen
+      description: Bucht eine Zahlung. Ohne Betrag wird der ganze offene Rest als bezahlt gebucht. Hat jemand mehrere offene Bestellungen, vorher mit den Bestellungen klären, welche gemeint ist.
+      mode: queued
+      max: 20
+      fields:
+        bestellung_id:
+          name: bestellung_id
+          description: Bestellnummer
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+        betrag:
+          name: betrag
+          description: Betrag in Euro, nur bei Teilzahlung oder offenem Fleischpreis
+          required: false
+          selector:
+            text:
+        methode:
+          name: methode
+          description: Bar, Überweisung, PayPal …, optional
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: bezahlt
+          daten: "{{ {'bestellung_id': bestellung_id | default(''), 'betrag': betrag | default(''), 'methode': methode | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_ausgeliefert:
+      alias: Wildkammer Auslieferung buchen
+      description: Markiert eine Bestellung als komplett ausgeliefert. Die Wurst verlässt das Lager, die Fleischtüten werden ausgelagert.
+      mode: queued
+      max: 20
+      fields:
+        bestellung_id:
+          name: bestellung_id
+          description: Bestellnummer
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: ausgeliefert
+          daten: "{{ {'bestellung_id': bestellung_id | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_stornieren:
+      alias: Wildkammer Bestellung stornieren
+      description: Storniert eine noch nicht ausgelieferte Bestellung und gibt die Ware wieder frei. Nur nach ausdrücklicher Bestätigung des Nutzers.
+      mode: queued
+      max: 20
+      fields:
+        bestellung_id:
+          name: bestellung_id
+          description: Bestellnummer
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: stornieren
+          daten: "{{ {'bestellung_id': bestellung_id | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_wurst_zugang:
+      alias: Wildkammer Wurst einbuchen
+      description: Bucht fertige Wurst oder abgefüllten Honig ins Lager, z. B. nach der Produktion oder dem Abfüllen.
+      mode: queued
+      max: 20
+      fields:
+        produkt:
+          name: produkt
+          description: Produkt, z. B. 'Salami' oder 'Pfefferbeißer 5er-Pack'
+          required: true
+          selector:
+            text:
+        menge:
+          name: menge
+          description: Anzahl Packungen, Stück oder Gläser
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: wurst_zugang
+          daten: "{{ {'produkt': produkt | default(''), 'menge': menge | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_wurst_korrektur:
+      alias: Wildkammer Inventur korrigieren
+      description: Korrigiert den Bestand von Wurst oder Honig nach einer Zählung. Menge ist die Abweichung, z. B. -2. Grund ist Pflicht.
+      mode: queued
+      max: 20
+      fields:
+        produkt:
+          name: produkt
+          description: Produkt
+          required: true
+          selector:
+            text:
+        menge:
+          name: menge
+          description: Abweichung, positiv oder negativ
+          required: true
+          selector:
+            number:
+              min: -10000
+              max: 10000
+              mode: box
+        grund:
+          name: grund
+          description: Grund der Korrektur
+          required: true
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: wurst_korrektur
+          daten: "{{ {'produkt': produkt | default(''), 'menge': menge | default(''), 'grund': grund | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_wurst_entnahme:
+      alias: Wildkammer Wurst entnehmen
+      description: Nimmt Wurst oder Honig ohne Kunde aus dem Lager, z. B. für Eigenverbrauch, als Geschenk, Probe oder weil sie verdorben ist. Bestellte (reservierte) Ware kann nicht entnommen werden.
+      mode: queued
+      max: 20
+      fields:
+        produkt:
+          name: produkt
+          description: Produkt
+          required: true
+          selector:
+            text:
+        menge:
+          name: menge
+          description: Anzahl Packungen, Stück oder Gläser
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+        grund:
+          name: grund
+          description: Eigenverbrauch, Geschenk, Probe, Verdorben oder Sonstiges; Standard Eigenverbrauch
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: wurst_entnahme
+          daten: "{{ {'produkt': produkt | default(''), 'menge': menge | default(''), 'grund': grund | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_rabatt:
+      alias: Wildkammer Rabatt
+      description: Setzt einen Rabatt in Euro auf eine ganze Bestellung, z. B. wenn ein niedrigerer Preis vereinbart wurde. 0 entfernt den Rabatt. Den Rabatt aus der Differenz zum vereinbarten Betrag errechnen lassen, indem erst die Bestellung abgefragt wird.
+      mode: queued
+      max: 20
+      fields:
+        bestellung_id:
+          name: bestellung_id
+          description: Bestellnummer
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+        betrag:
+          name: betrag
+          description: Rabatt in Euro
+          required: true
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: rabatt
+          daten: "{{ {'bestellung_id': bestellung_id | default(''), 'betrag': betrag | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_bestellung_aendern:
+      alias: Wildkammer Bestellung ändern
+      description: "Ändert eine offene Bestellung: setzt die neue Gesamtmenge eines Wurst- oder Honigprodukts (0 entfernt es, ein neues Produkt wird ergänzt, mehr nur aus freiem Lager) und/oder das Bestelldatum (JJJJ-MM-TT). Erst die Bestellung abfragen, um die Nummer zu kennen."
+      mode: queued
+      max: 20
+      fields:
+        bestellung_id:
+          name: bestellung_id
+          description: Bestellnummer
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+        produkt:
+          name: produkt
+          description: Wurst- oder Honigprodukt
+          required: false
+          selector:
+            text:
+        menge:
+          name: menge
+          description: Neue Gesamtmenge
+          required: false
+          selector:
+            number:
+              min: 0
+              max: 1000
+              mode: box
+        datum:
+          name: datum
+          description: Neues Bestelldatum JJJJ-MM-TT
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: bestellung_aendern
+          daten: "{{ {'bestellung_id': bestellung_id | default(''), 'produkt': produkt | default(''), 'menge': menge | default(''), 'datum': datum | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_notiz:
+      alias: Wildkammer Notiz anlegen
+      description: Speichert eine Notiz, z. B. einen Wunsch für Ware, die gerade nicht da ist ("wenn du mal Schwein hast, ein ganzes"). Das ist keine Bestellung und reserviert nichts. Kunde ist freiwillig; bei Kunden erst die Kundensuche nutzen und die kunde_id nehmen.
+      mode: queued
+      max: 20
+      fields:
+        text:
+          name: text
+          description: Notiztext
+          required: true
+          selector:
+            text:
+        kunde_id:
+          name: kunde_id
+          description: Kundennummer, optional
+          required: false
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+        kunde:
+          name: kunde
+          description: Kundenname, optional, nur wenn eindeutig
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: notiz
+          daten: "{{ {'text': text | default(''), 'kunde_id': kunde_id | default(''), 'kunde': kunde | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_notizen:
+      alias: Wildkammer Notizen
+      description: Listet die offenen Notizen und Wünsche mit Kunde und Datum.
+      mode: queued
+      max: 20
+      fields: {}
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: notizen
+          daten: "{{ {} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_notiz_erledigt:
+      alias: Wildkammer Notiz erledigt
+      description: Hakt eine Notiz als erledigt ab. Erst die Notizen abfragen, um die notiz_id zu kennen.
+      mode: queued
+      max: 20
+      fields:
+        notiz_id:
+          name: notiz_id
+          description: Nummer der Notiz
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: notiz_erledigt
+          daten: "{{ {'notiz_id': notiz_id | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_lieferung_zuruecknehmen:
+      alias: Wildkammer Lieferung zurücknehmen
+      description: Macht eine versehentlich gebuchte Auslieferung rückgängig. Die Ware kommt zurück ins Lager, die Bestellung ist wieder offen. Nur nach ausdrücklicher Bestätigung des Nutzers.
+      mode: queued
+      max: 20
+      fields:
+        bestellung_id:
+          name: bestellung_id
+          description: Bestellnummer
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 100000
+              mode: box
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: lieferung_zuruecknehmen
+          daten: "{{ {'bestellung_id': bestellung_id | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_wurst_preis:
+      alias: Wildkammer Wurstpreis ändern
+      description: Ändert den Preis eines Wurst- oder Honigprodukts. Gilt nur für neue Bestellungen.
+      mode: queued
+      max: 20
+      fields:
+        produkt:
+          name: produkt
+          description: Produkt
+          required: true
+          selector:
+            text:
+        preis:
+          name: preis
+          description: Neuer Preis in Euro
+          required: true
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: wurst_preis
+          daten: "{{ {'produkt': produkt | default(''), 'preis': preis | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_fleischpreis:
+      alias: Wildkammer Kilopreis Fleisch
+      description: Setzt den Kilopreis für eine Wildart und ein Teilstück. Ein leerer Preis löscht ihn.
+      mode: queued
+      max: 20
+      fields:
+        wildart:
+          name: wildart
+          description: z. B. Reh oder Schwarzwild
+          required: true
+          selector:
+            text:
+        teil:
+          name: teil
+          description: z. B. Rücken
+          required: true
+          selector:
+            text:
+        preis_kg:
+          name: preis_kg
+          description: Euro pro kg
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: fleischpreis
+          daten: "{{ {'wildart': wildart | default(''), 'teil': teil | default(''), 'preis_kg': preis_kg | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_umsatz:
+      alias: Wildkammer Umsatz
+      description: Gesamtumsatz aller nicht stornierten Bestellungen, davon bezahlt und offen.
+      mode: queued
+      max: 20
+      fields: {}
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: umsatz
+          daten: "{{ {} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_wurst_etikett_rendern:
+      alias: Wildkammer Wurstetikett rendern
+      mode: queued
+      max: 50
+      fields:
+        a:
+          description: Druckauftrag aus der Wildkammer
+      sequence:
+      - action: niimbot.print
+        target:
+          device_id: 9cea996fbc0962ebe6d27af33baf87e9
+        data:
+          width: 384
+          height: 240
+          density: 3
+          payload:
+          - type: text
+            value: "{{ a.zeile1 }}"
+            x: 8
+            y: 70
+            size: "{{ 46 if a.zeile1 | length <= 8 else 34 if a.zeile1 | length <= 12 else 30 }}"
+          - type: text
+            value: "{{ a.zeile2 or ' ' }}"
+            x: 8
+            y: 134
+            size: 26
+          - type: text
+            value: "{{ a.code }}"
+            x: 8
+            y: 204
+            size: 24
+          - type: qrcode
+            data: "http://192.168.178.60:8099/w/{{ a.nummer }}"
+            x: 236
+            y: 44
+            boxsize: 4
+            border: 4
+            eclevel: m
+          - type: text
+            value: "{{ a.datum }}"
+            x: 244
+            y: 204
+            size: 24
+      - variables:
+          fertig:
+            gedruckt: true
+      - stop: Gedruckt
+        response_variable: fertig
+    wildkammer_wurst_etiketten:
+      alias: Wildkammer Wurstetiketten drucken
+      description: Druckt Etiketten für fertige Wurst auf dem Etikettendrucker und bucht jede gedruckte Packung ins Lager. Statt zusätzlich einzubuchen.
+      mode: queued
+      max: 5
+      fields:
+        produkt:
+          name: produkt
+          description: Produkt
+          required: true
+          selector:
+            text:
+        anzahl:
+          name: anzahl
+          description: Anzahl Etiketten (1 bis 50)
+          required: true
+          selector:
+            number:
+              min: 1
+              max: 50
+              mode: box
+      sequence:
+      - variables:
+          gedruckt: 0
+          unsicher: 0
+      - repeat:
+          count: "{{ [anzahl | int(1), 50] | min }}"
+          sequence:
+          - action: rest_command.wildkammer_wurst_auftrag
+            data:
+              produkt: "{{ produkt }}"
+            response_variable: auftrag
+          - if: "{{ not auftrag.content.ok }}"
+            then:
+            - variables:
+                ergebnis: "{{ auftrag.content }}"
+            - stop: Produkt unklar
+              response_variable: ergebnis
+          - variables:
+              druck:
+                gedruckt: false
+          - action: script.wildkammer_wurst_etikett_rendern
+            data:
+              a: "{{ auftrag.content }}"
+            response_variable: druck
+            continue_on_error: true
+          - variables:
+              unsicher: "{{ unsicher + (0 if druck.gedruckt else 1) }}"
+          - action: rest_command.wildkammer_wurst_gedruckt
+            data:
+              auftrag: "{{ auftrag.content.auftrag }}"
+          - variables:
+              gedruckt: "{{ gedruckt + 1 }}"
+      - variables:
+          ergebnis:
+            ok: true
+            gedruckt: "{{ gedruckt }}"
+            druck_unsicher: "{{ unsicher }}"
+      - stop: Fertig
+        response_variable: ergebnis
