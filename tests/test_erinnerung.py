@@ -56,3 +56,35 @@ def test_zuruecknehmen_loescht_lieferdatum(c, uhr):
 def test_ungueltige_eingaben(c):
     assert "f=1" in c.post("/erinnerung", data={"tage": "drei", "uhrzeit": "18:00"}).headers["Location"]
     assert "f=1" in c.post("/erinnerung", data={"tage": "3", "uhrzeit": "25:00"}).headers["Location"]
+
+
+def test_bezahlt_mit_erhaltenem_betrag(c):
+    zugang(c, "Salami", 5)  # 16 € je Stück
+    a = bestellung(c, "Erik Probst", [{"produkt": "Salami", "menge": 3}])  # 48 €
+    r = c.post(f"/bestellungen/{a}/erhalten", data={"betrag": "45", "art": "fertig", "methode": "Bar"})
+    assert "f=1" not in r.headers["Location"]
+    b = api(c, "bestellungen", kunde="Erik Probst", filter="alle")["bestellungen"][0]
+    assert b["vollstaendig_bezahlt"] and b["rabatt"] == "3,00 €" and b["summe"] == "45,00 €" and b["offen"] == "0,00 €"
+
+
+def test_teilzahlung_und_dann_rest_mit_rabatt(c):
+    zugang(c, "Salami", 5)
+    a = bestellung(c, "Greta", [{"produkt": "Salami", "menge": 2}])  # 32 €
+    c.post(f"/bestellungen/{a}/erhalten", data={"betrag": "10", "art": "teil"})
+    b = api(c, "bestellungen", kunde="Greta")["bestellungen"][0]
+    assert b["offen"] == "22,00 €" and not b["rabatt"]
+    # Über Claude: 20 € gegeben, Rest erlassen
+    x = api(c, "bezahlt", bestellung_id=a, betrag="20", rest_erlassen="ja")
+    assert x["ok"] and x["bestellung"]["vollstaendig_bezahlt"] and x["bestellung"]["rabatt"] == "2,00 €"
+
+
+def test_bezahlt_mit_fehlerfaelle(c):
+    zugang(c, "Salami", 5)
+    a = bestellung(c, "Ben", [{"produkt": "Salami", "menge": 1}])  # 16 €
+    assert "f=1" in c.post(f"/bestellungen/{a}/erhalten", data={"betrag": "20", "art": "fertig"}).headers["Location"]
+    assert "f=1" in c.post(f"/bestellungen/{a}/erhalten", data={"betrag": "", "art": "fertig"}).headers["Location"]
+    # Ohne rest_erlassen bleibt es eine Teilzahlung
+    x = api(c, "bezahlt", bestellung_id=a, betrag="10", rest_erlassen="nein")
+    assert x["bestellung"]["offen"] == "6,00 €"
+    html = c.get(f"/bestellungen/{a}").get_data(as_text=True)
+    assert 'value="6,00"' in html and "Rabatt von Hand ändern" in html

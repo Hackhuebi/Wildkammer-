@@ -1103,18 +1103,27 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
   </div>{% endif %}
 </div>
 {% if b.status != 'storniert' and not b.bezahlt %}
-<h2>Teilzahlung oder freier Betrag</h2>
-<form class="karte form-zeile" method="post" action="{{ url_for('bestellung_bezahlt', oid=b.id) }}">
-  <label>Betrag (€)<input name="betrag" inputmode="decimal" required></label>
-  <label>Art<input name="methode" placeholder="Bar, PayPal …"></label>
-  <button class="neben">Buchen</button>
+<h2>Zahlung</h2>
+<form class="karte" method="post" action="{{ url_for('bestellung_erhalten', oid=b.id) }}">
+  <div class="form-zeile">
+    <label>Erhalten (€)<input name="betrag" inputmode="decimal" required
+      value="{{ ('%.2f' % (b.offen_cent / 100)).replace('.', ',') if not b.preis_offen else '' }}"></label>
+    <label>Art<input name="methode" placeholder="Bar, PayPal …"></label>
+  </div>
+  {% if not b.preis_offen %}<p class="leise">Weniger als {{ euro(b.offen_cent) }} eingetragen? Dann wird der Rest bei
+  „Erledigt“ als Rabatt erlassen.</p>{% endif %}
+  <div class="zeile">
+    <button name="art" value="fertig">Erledigt</button>
+    <button class="neben" name="art" value="teil">Nur Teilzahlung</button>
+  </div>
 </form>{% endif %}
-{% if b.status != 'storniert' %}<h2>Rabatt</h2>
-<form class="karte form-zeile" method="post" action="{{ url_for('bestellung_rabatt', oid=b.id) }}">
+{% if b.status != 'storniert' %}<details class="karte" style="margin-top:22px"><summary><b>Rabatt von Hand ändern</b>
+  {% if b.rabatt_cent %}<span class="leise" style="margin-left:8px">jetzt {{ euro(b.rabatt_cent) }}</span>{% endif %}</summary>
+<form class="form-zeile" method="post" action="{{ url_for('bestellung_rabatt', oid=b.id) }}">
   <label>Rabatt auf die ganze Bestellung (€)<input name="rabatt" inputmode="decimal"
     value="{{ ('%.2f' % (b.rabatt_cent / 100)).replace('.', ',') if b.rabatt_cent else '' }}" placeholder="0,00"></label>
   <button class="neben">Speichern</button>
-</form>{% endif %}
+</form></details>{% endif %}
 {% if b.zahlungen %}<h2>Zahlungen</h2><div class="karte rollbar"><table class="knapp">
 <tr><th>Zahlung</th><th class="zahl">Betrag</th><th></th></tr>
 {% for z in b.zahlungen %}<tr><td class="umbruch">{{ de(z.datum[:10]) }}{% if z.methode %}<br><span class="leise">{{ z.methode }}</span>{% endif %}</td>
@@ -1218,6 +1227,15 @@ document.querySelectorAll("select[data-ziel]").forEach(function (s) {
         f = request.form
         return _aktion(oid, lambda: vk.zahlung(oid, f.get("betrag") or None, f.get("methode", "")),
                        f"Zahlung für #{oid} gebucht.")
+
+    @app.post("/bestellungen/<int:oid>/erhalten")
+    def bestellung_erhalten(oid):
+        f = request.form
+        if f.get("art") == "teil":
+            return _aktion(oid, lambda: vk.zahlung(oid, f.get("betrag"), f.get("methode", "")),
+                           f"Teilzahlung für #{oid} gebucht.")
+        return _aktion(oid, lambda: vk.bezahlt_mit(oid, f.get("betrag"), f.get("methode", "")),
+                       f"#{oid} ist bezahlt.")
 
     @app.post("/bestellungen/<int:oid>/ausgeliefert")
     def bestellung_ausgeliefert(oid):
@@ -1365,7 +1383,10 @@ document.querySelectorAll("select[data-ziel]").forEach(function (s) {
         "notiz_erledigt": lambda x: {"notiz": _notiz_kurz(vk.vormerkung_erledigen(_ganz_id(x.get("notiz_id"))))},
         "lieferung_zuruecknehmen": lambda x: {"zurueckgenommen": kurz(vk.lieferung_zuruecknehmen(int(bestellnummer(x))))},
         "bestellungen": bestellungen_api,
-        "bezahlt": lambda x: {"bestellung": kurz(vk.zahlung(bestellnummer(x), x.get("betrag"), x.get("methode", "")))},
+        "bezahlt": lambda x: {"bestellung": kurz(
+            vk.bezahlt_mit(bestellnummer(x), x.get("betrag"), x.get("methode", ""))
+            if str(x.get("rest_erlassen", "")).lower() in ("true", "1", "ja", "on") and x.get("betrag") not in (None, "")
+            else vk.zahlung(bestellnummer(x), x.get("betrag"), x.get("methode", "")))},
         "ausgeliefert": lambda x: {"bestellung": kurz(vk.ausliefern(bestellnummer(x)))},
         "stornieren": lambda x: {"bestellung": kurz(vk.stornieren(bestellnummer(x)))},
         "wurst_zugang": lambda x: wurst_api(x, "zugang"),

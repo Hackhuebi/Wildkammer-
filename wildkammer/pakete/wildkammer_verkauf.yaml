@@ -234,7 +234,7 @@ wildkammer_verkauf:
         response_variable: ergebnis
     wildkammer_bezahlt:
       alias: Wildkammer Zahlung buchen
-      description: Bucht eine Zahlung. Ohne Betrag wird der ganze offene Rest als bezahlt gebucht. Hat jemand mehrere offene Bestellungen, vorher mit den Bestellungen klären, welche gemeint ist.
+      description: "Bucht eine Zahlung. Ohne Betrag wird der ganze offene Rest als bezahlt gebucht. Hat der Kunde einen anderen Betrag gegeben und ist die Sache damit erledigt (z. B. 50 statt 54 Euro), betrag nennen und rest_erlassen auf ja setzen: Die Differenz wird als Rabatt gebucht. Ohne rest_erlassen ist es eine Teilzahlung und der Rest bleibt offen. Im Zweifel nachfragen. Hat jemand mehrere offene Bestellungen, vorher mit den Bestellungen klären, welche gemeint ist."
       mode: queued
       max: 20
       fields:
@@ -249,10 +249,19 @@ wildkammer_verkauf:
               mode: box
         betrag:
           name: betrag
-          description: Betrag in Euro, nur bei Teilzahlung oder offenem Fleischpreis
+          description: Erhaltener Betrag in Euro, optional
           required: false
           selector:
             text:
+        rest_erlassen:
+          name: rest_erlassen
+          description: ja, wenn die Bestellung mit diesem Betrag erledigt ist
+          required: false
+          selector:
+            select:
+              options:
+              - nein
+              - ja
         methode:
           name: methode
           description: Bar, Überweisung, PayPal …, optional
@@ -263,7 +272,7 @@ wildkammer_verkauf:
       - action: rest_command.wildkammer_verkauf
         data:
           aktion: bezahlt
-          daten: "{{ {'bestellung_id': bestellung_id | default(''), 'betrag': betrag | default(''), 'methode': methode | default('')} }}"
+          daten: "{{ {'bestellung_id': bestellung_id | default(''), 'betrag': betrag | default(''), 'rest_erlassen': rest_erlassen | default(''), 'methode': methode | default('')} }}"
         response_variable: antwort
       - variables:
           ergebnis: "{{ antwort.content }}"

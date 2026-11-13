@@ -717,6 +717,31 @@ class Verkauf:
                       (oid, cent, self._jetzt(), (methode or "")[:40], (notiz or "")[:200]))
         return self.bestellung(oid)
 
+    def bezahlt_mit(self, oid, betrag, methode=""):
+        """Der Kunde hat diesen Betrag gegeben und damit ist die Bestellung erledigt:
+        Was zum offenen Rest fehlt, wird als Rabatt erlassen. Kein Rabatt von Hand nötig."""
+        b = self.bestellung(oid)
+        if b["status"] == "storniert":
+            raise Fehler("bestellung_storniert")
+        cent = _cent(betrag)
+        if cent is None or cent < 0:
+            raise Fehler("betrag_ungueltig")
+        if b["preis_offen"]:
+            # Ohne vollständigen Preis gibt es keinen Rest, der erlassen werden könnte
+            return self.zahlung(oid, betrag, methode) if cent else b
+        offen = b["summe_cent"] - b["bezahlt_cent"]
+        if offen <= 0:
+            raise Fehler("nichts_offen")
+        if cent > offen:
+            raise Fehler("betrag_zu_hoch", offen=offen)
+        with self.d._verbindung() as v:
+            if offen - cent:
+                v.execute("UPDATE bestellungen SET rabatt_cent = rabatt_cent + ? WHERE id = ?", (offen - cent, oid))
+            if cent:
+                v.execute("INSERT INTO zahlungen(bestellung_id, betrag_cent, datum, methode, notiz) VALUES(?, ?, ?, ?, ?)",
+                          (oid, cent, self._jetzt(), (methode or "")[:40], ""))
+        return self.bestellung(oid)
+
     def rabatt_setzen(self, oid, betrag):
         """Rabatt in Euro für die ganze Bestellung. 0 oder leer entfernt ihn."""
         b = self.bestellung(oid)
