@@ -69,7 +69,7 @@ def test_startseite_reihenfolge(c):
     api(c, "notiz", text="Ein ganzes Schwein")
     html = c.get("/").get_data(as_text=True)
     # Standard: Notizen ganz unten
-    assert html.index("<h2>Zu liefern</h2>") < html.index("<h2>Notizen</h2>") < html.index("Neue Bestellung</a>")
+    assert html.index("<h2>Zu liefern</h2>") < html.index("Neue Bestellung</a>") < html.index("<h2>Notizen</h2>")
     for _ in range(5):
         c.post("/heute/anpassen", data={"baustein": "notizen", "tun": "hoch"})
     html = c.get("/").get_data(as_text=True)
@@ -95,3 +95,14 @@ def test_bestellliste_zeigt_positionen(c):
                                   {"wildart": "Reh", "teil": "Rücken", "menge": 1}])
     html = c.get("/bestellungen").get_data(as_text=True)
     assert '<span class="posten">2× Salami, 1× Knacker, Reh Rücken</span>' in html
+
+
+def test_knopf_neue_bestellung_verschiebbar(c):
+    html = c.get("/").get_data(as_text=True)
+    assert html.count("Neue Bestellung</a>") == 1
+    for _ in range(8):
+        c.post("/heute/anpassen", data={"baustein": "neu", "tun": "hoch"})
+    html = c.get("/").get_data(as_text=True)
+    assert html.index("Neue Bestellung</a>") < html.index("<h2>Zu liefern</h2>")
+    c.post("/heute/anpassen", data={"baustein": "neu", "tun": "umschalten"})
+    assert "Neue Bestellung</a>" not in c.get("/").get_data(as_text=True)

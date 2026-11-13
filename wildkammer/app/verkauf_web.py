@@ -337,14 +337,14 @@ Alles wird zusammen gebucht oder gar nichts.</p>
 </table></div>
 {% if schulden|length > 8 %}<p class="leise" style="margin:8px 4px"><a href="{{ url_for('bestellungen', filter='unbezahlt') }}">Alle unbezahlten Bestellungen</a></p>{% endif %}{% endif %}
 """,
+            "neu": """<p><a class="knopf" href="{{ url_for('bestellung_neu') }}" style="margin-top:20px">Neue Bestellung</a></p>""",
             "notizen": """{% if notizen %}<h2>Notizen</h2>""" + NOTIZEN + """
 <p class="leise" style="margin:8px 4px"><a href="{{ url_for('notizen') }}">Alle Notizen und neue Notiz ›</a></p>{% endif %}
 """,
         }
         vorlage = ('<p class="leise" style="margin:-4px 4px 14px">{{ datum_text }}</p>'
                    + "".join(bausteine[k] for k in _startseite()[0])
-                   + """<p><a class="knopf" href="{{ url_for('bestellung_neu') }}" style="margin-top:20px">Neue Bestellung</a></p>
-<p class="leise" style="text-align:center;margin-top:18px"><a href="{{ url_for('startseite_anpassen') }}">Startseite anpassen</a></p>""")
+                   + """<p class="leise" style="text-align:center;margin-top:18px"><a href="{{ url_for('startseite_anpassen') }}">Startseite anpassen</a></p>""")
         pliste, pwurst, pfleisch = _packliste(vk.packliste_ids())
         erinnerung_tage = int(vk.einstellung("erinnerung_tage") or 0)
         return seite(vorlage, "Heute", faellig=vk.ueberfaellig(erinnerung_tage) if erinnerung_tage else [],
@@ -353,7 +353,8 @@ Alles wird zusammen gebucht oder gar nichts.</p>
                      datum_text=f"{tage[jetzt.weekday()]}, {jetzt:%d.%m.%Y}")
 
     STARTSEITE = [("packliste", "Packliste"), ("hinweise", "Hinweise"), ("zahlen", "Kennzahlen"),
-                  ("zuliefern", "Zu liefern"), ("kassieren", "Noch zu kassieren"), ("notizen", "Notizen")]
+                  ("zuliefern", "Zu liefern"), ("kassieren", "Noch zu kassieren"), ("neu", "Knopf „Neue Bestellung“"),
+                  ("notizen", "Notizen")]
 
     def _startseite():
         """(sichtbare Bausteine in Reihenfolge, ausgeblendete)"""
