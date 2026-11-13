@@ -107,6 +107,12 @@ Zahlungen und Rabatt korrigierst du wie bisher auf derselben Seite.
 
 **Heute (ab 2.8.0):** Die Startseite zeigt Hinweise (nicht eingebuchte Tüten, Fleisch über 1 Jahr, knappe Wurst unter 5 freien Packungen), was zu liefern ist, und wer noch zahlen muss. Die Packliste findest du dort, unter Bestellungen und unter Mehr.
 
+## Auswertung und Chargen (ab 2.16.0)
+
+Mehr → **Auswertung**: Umsatz (nach Bestelldatum) und Einnahmen (nach Zahlungstag) für einen Zeitraum, nach Produkt, nach Monat und nach Charge.
+
+**Chargen:** Im Lager auf ein Produkt tippen → „Neue Charge beginnen“ mit Name und Kosten. Alles, was danach eingebucht wird, gehört zur neuen Charge. Verkauft wird rechnerisch aus der ältesten Charge zuerst. Pro Charge siehst du verkauft, übrig, Umsatz nach Rabatt und den Gewinn (Umsatz minus Kosten). Der Bestand bisher steht in der Charge „… Start“; deren Kosten kannst du nachtragen.
+
 ## Zahlungserinnerung (ab 2.13.0)
 
 Mehr → **Zahlungserinnerung**: Tage (0 = aus), Uhrzeit und Handy wählen, speichern, mit „Test-Nachricht“ prüfen. Einmal am Tag ab der Uhrzeit kommt eine Nachricht mit allen Lieferungen, die länger als eingestellt unbezahlt sind. Antippen öffnet die Wildkammer.

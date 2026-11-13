@@ -129,6 +129,7 @@ SYMBOLE = {
     "mehr": _symbol('<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>'),
     "kunden": _symbol('<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><path d="M15.5 5.6a3 3 0 0 1 0 5.8M17.5 14.4c1.7.6 2.7 2.2 3 4.6"/>'),
     "scannen": _symbol('<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8 9v6M11 9v6M14 9v6M17 9v6"/>'),
+    "auswertung": _symbol('<path d="M4 20h16"/><rect x="5.5" y="12" width="3" height="6" rx=".8"/><rect x="10.5" y="7" width="3" height="11" rx=".8"/><rect x="15.5" y="9.5" width="3" height="8.5" rx=".8"/>'),
     "glocke": _symbol('<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
     "preise": _symbol('<path d="M3.5 12.5 11 5h7.5v7.5L11 20z"/><circle cx="15" cy="9" r="1.4"/>'),
     "sicherung": _symbol('<path d="M12 3.5 5 6v5.5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>'),
@@ -137,7 +138,7 @@ SYMBOLE = {
 # Welcher Reiter unten leuchtet: nach dem ersten Pfadteil.
 BEREICH = {"": "heute", "heute": "heute", "fleisch": "fleisch", "s": "fleisch", "wurst": "wurst", "w": "wurst", "preise": "wurst",
            "bestellungen": "bestellungen", "packliste": "bestellungen",
-           "kunden": "mehr", "scan": "mehr", "sicherung": "mehr", "mehr": "mehr"}
+           "kunden": "mehr", "auswertung": "mehr", "scan": "mehr", "sicherung": "mehr", "mehr": "mehr"}
 
 RAHMEN = """<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -316,6 +317,7 @@ def erstelle_app(pfad, uhr=None):
   <li><a href="{{ url_for('packliste') }}">{{ symbole.packliste|safe }}Packliste</a></li>
   <li><a href="{{ url_for('kunden') }}">{{ symbole.kunden|safe }}Kunden</a></li>
   <li><a href="{{ url_for('scan') }}">{{ symbole.scannen|safe }}Scannen</a></li>
+  <li><a href="{{ url_for('auswertung') }}">{{ symbole.auswertung|safe }}Auswertung</a></li>
   <li><a href="{{ url_for('erinnerung_seite') }}">{{ symbole.glocke|safe }}Zahlungserinnerung</a></li>
   <li><a href="{{ url_for('preise') }}">{{ symbole.preise|safe }}Kilopreise Fleisch</a></li>
   <li><a href="{{ url_for('sicherung') }}">{{ symbole.sicherung|safe }}Sicherung</a></li>

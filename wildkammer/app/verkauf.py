@@ -109,6 +109,14 @@ CREATE TABLE IF NOT EXISTS vormerkungen (
     erledigt TEXT,
     bestellung_id INTEGER REFERENCES bestellungen(id)
 );
+CREATE TABLE IF NOT EXISTS chargen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produkt_id INTEGER NOT NULL REFERENCES wurstprodukte(id),
+    name TEXT NOT NULL,
+    beginn TEXT NOT NULL,
+    kosten_cent INTEGER CHECK (kosten_cent IS NULL OR kosten_cent >= 0),
+    notiz TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS einstellungen (
     schluessel TEXT PRIMARY KEY,
     wert TEXT NOT NULL
@@ -833,6 +841,107 @@ class Verkauf:
         with self.d._verbindung() as v:
             v.execute("DELETE FROM vormerkungen WHERE id = ?", (vid,))
 
+    # ---------------- Chargen ----------------
+    # Eine Charge beginnt zu einem Zeitpunkt: Alles, was danach eingebucht wird, gehört zu ihr, bis die nächste
+    # beginnt. Verkauft und entnommen wird rechnerisch immer aus der ältesten Charge mit Restbestand.
+    def _startcharge(self, v, pid, name):
+        if not v.execute("SELECT 1 FROM chargen WHERE produkt_id = ?", (pid,)).fetchone():
+            v.execute("INSERT INTO chargen(produkt_id, name, beginn) VALUES(?, ?, '0000-00-00')", (pid, f"{name} Start"))
+
+    def charge_neu(self, pid, name="", kosten=None):
+        p = self.produkt(pid)
+        if not p:
+            raise Fehler("produkt_unbekannt")
+        jetzt = self.d.uhr()
+        name = (name or "").strip() or f"{p['name']} {jetzt:%m/%Y}"
+        with self.d._verbindung() as v:
+            self._startcharge(v, pid, p["name"])
+            basis, n = name, 2
+            while v.execute("SELECT 1 FROM chargen WHERE produkt_id = ? AND name = ?", (pid, name)).fetchone():
+                name, n = f"{basis} ({n})", n + 1
+            cid = v.execute("INSERT INTO chargen(produkt_id, name, beginn, kosten_cent) VALUES(?, ?, ?, ?)",
+                            (pid, name[:80], jetzt.isoformat(), _cent(kosten))).lastrowid
+        return cid
+
+    def charge_aendern(self, cid, name, kosten):
+        name = (name or "").strip()
+        if not name:
+            raise Fehler("name_fehlt")
+        with self.d._verbindung() as v:
+            if not v.execute("UPDATE chargen SET name = ?, kosten_cent = ? WHERE id = ?",
+                             (name[:80], _cent(kosten), cid)).rowcount:
+                raise Fehler("charge_unbekannt")
+
+    def chargen(self, pid=None):
+        """Chargen mit rechnerischer Zuordnung: eingebucht, verkauft, entnommen, Rest, Umsatz nach Rabatt,
+        Rabattanteil, Kosten und Gewinn."""
+        with self.d._verbindung() as v:
+            produkte = [dict(p) for p in v.execute(
+                "SELECT id, name, preis_cent, kategorie FROM wurstprodukte" + (" WHERE id = ?" if pid else "")
+                + " ORDER BY kategorie = 'honig', name", (pid,) if pid else ())]
+            for p in produkte:
+                self._startcharge(v, p["id"], p["name"])
+            alle_chargen = [dict(c) for c in v.execute("SELECT * FROM chargen ORDER BY produkt_id, beginn, id")]
+            bewegungen = [dict(b) for b in v.execute("SELECT * FROM wurstbewegungen ORDER BY erstellt, id")]
+        bestellungen = {}
+
+        def stueckpreis(oid, produkt_id):
+            if oid not in bestellungen:
+                try:
+                    bestellungen[oid] = self.bestellung(oid)
+                except Fehler:
+                    bestellungen[oid] = None
+            b = bestellungen[oid]
+            if not b:
+                return 0, 0
+            z = next((z for z in b["wurst"] if z["produkt_id"] == produkt_id), None)
+            if not z:
+                return 0, 0
+            anteil = z["einzelpreis_cent"] * b["rabatt_cent"] / b["positionen_cent"] if b["positionen_cent"] else 0
+            return z["einzelpreis_cent"], anteil
+
+        ergebnis = []
+        for p in produkte:
+            ch = [c for c in alle_chargen if c["produkt_id"] == p["id"]]
+            for c in ch:
+                c.update(eingebucht=0, verkauft=0, entnommen=0, rest=0, umsatz=0.0, rabatt=0.0)
+            verbrauch = {}
+            for b in (b for b in bewegungen if b["produkt_id"] == p["id"]):
+                oid = int(b["grund"][len("Bestellung #"):]) if b["grund"].startswith("Bestellung #") else None
+                if b["menge"] > 0 and b["art"] == "ruecknahme" and oid in verbrauch:
+                    rest = b["menge"]
+                    while rest and verbrauch[oid]:
+                        c, q, preis, anteil = verbrauch[oid].pop()
+                        n = min(q, rest)
+                        c["rest"] += n; c["verkauft"] -= n
+                        c["umsatz"] -= n * (preis - anteil); c["rabatt"] -= n * anteil
+                        if q > n:
+                            verbrauch[oid].append((c, q - n, preis, anteil))
+                        rest -= n
+                    continue
+                if b["menge"] > 0:
+                    c = [c for c in ch if c["beginn"] <= b["erstellt"]][-1]
+                    c["eingebucht"] += b["menge"]; c["rest"] += b["menge"]
+                    continue
+                offen = -b["menge"]
+                preis, anteil = stueckpreis(oid, p["id"]) if b["art"] == "auslieferung" and oid else (0, 0)
+                while offen:
+                    c = next((c for c in ch if c["rest"] > 0), ch[-1])
+                    n = min(offen, c["rest"]) if c["rest"] > 0 else offen
+                    c["rest"] -= n
+                    if b["art"] == "auslieferung":
+                        c["verkauft"] += n; c["umsatz"] += n * (preis - anteil); c["rabatt"] += n * anteil
+                        verbrauch.setdefault(oid, []).append((c, n, preis, anteil))
+                    else:
+                        c["entnommen"] += n
+                    offen -= n
+            for c in ch:
+                umsatz, rabatt = round(c.pop("umsatz")), round(c.pop("rabatt"))
+                ergebnis.append({**c, "produkt": p["name"], "kategorie": p["kategorie"], "umsatz_cent": umsatz,
+                                 "rabatt_cent": rabatt, "lagerwert_cent": max(c["rest"], 0) * p["preis_cent"],
+                                 "gewinn_cent": None if c["kosten_cent"] is None else umsatz - c["kosten_cent"]})
+        return ergebnis
+
     # ---------------- Einstellungen und Zahlungserinnerung ----------------
     STANDARD = {"erinnerung_tage": "3", "erinnerung_uhrzeit": "18:00", "erinnerung_ziel": "", "erinnerung_zuletzt": ""}
 
@@ -1077,6 +1186,69 @@ class Verkauf:
                 raise Fehler("schon_ausgeliefert")
             v.execute("UPDATE bestellungen SET status = 'storniert' WHERE id = ?", (oid,))
         return self.bestellung(oid)
+
+    def auswertung(self, von, bis, produkt=""):
+        """Umsatz nach Bestelldatum, Einnahmen nach Zahlungsdatum, jeweils von–bis einschließlich.
+        produkt: "" (alles), "wurst", "honig", "fleisch" oder "p:<produkt_id>"."""
+        for tag in (von, bis):
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", tag or ""):
+                raise Fehler("datum_ungueltig")
+        art = {p["id"]: p["kategorie"] for p in self.produkte(nur_aktiv=False)}
+        with self.d._verbindung() as v:
+            alle = [b for b in self._bestellungen(v, filter="alle")
+                    if b["status"] != "storniert" and von <= b["datum"] <= bis]
+            zahlungen = v.execute(
+                "SELECT z.datum, z.betrag_cent FROM zahlungen z JOIN bestellungen b ON b.id = z.bestellung_id "
+                "WHERE b.status != 'storniert' AND substr(z.datum, 1, 10) BETWEEN ? AND ?", (von, bis)).fetchall()
+
+        def passt(kategorie, pid=None):
+            if not produkt:
+                return True
+            if produkt.startswith("p:"):
+                return pid is not None and str(pid) == produkt[2:]
+            return kategorie == produkt
+
+        zeilen, monate, preis_offen = {}, {}, 0
+        for b in alle:
+            m = monate.setdefault(b["datum"][:7], {"umsatz_cent": 0, "einnahmen_cent": 0})
+            if not produkt:
+                m["umsatz_cent"] += b["summe_cent"]
+            for z in b["wurst"]:
+                k = art.get(z["produkt_id"], "wurst")
+                if not passt(k, z["produkt_id"]):
+                    continue
+                r = zeilen.setdefault(("p", z["produkt_id"]), {"name": z["produktname"], "kategorie": k,
+                                                               "menge": 0, "cent": 0, "einheit": z["einheit"]})
+                r["menge"] += z["menge"]
+                r["cent"] += z["menge"] * z["einzelpreis_cent"]
+                if produkt:
+                    m["umsatz_cent"] += z["menge"] * z["einzelpreis_cent"]
+            for f in b["fleisch"]:
+                if not passt("fleisch"):
+                    continue
+                r = zeilen.setdefault(("f", f["art"], f["teil"]), {"name": f"{f['art']} {f['teil']}", "kategorie": "fleisch",
+                                                                  "menge": 0, "cent": 0, "einheit": "Tüte"})
+                r["menge"] += 1
+                r["cent"] += f["preis_cent"] or 0
+                preis_offen += f["preis_cent"] is None
+                if produkt:
+                    m["umsatz_cent"] += f["preis_cent"] or 0
+        for datum, cent in zahlungen:
+            monate.setdefault(datum[:7], {"umsatz_cent": 0, "einnahmen_cent": 0})["einnahmen_cent"] += cent
+        reihenfolge = {"wurst": 0, "honig": 1, "fleisch": 2}
+        liste = sorted(zeilen.values(), key=lambda r: (reihenfolge.get(r["kategorie"], 9), -r["cent"], r["name"]))
+        return {
+            "zeilen": liste,
+            "brutto_cent": sum(r["cent"] for r in liste),
+            "rabatt_cent": sum(b["rabatt_cent"] for b in alle),
+            "umsatz_cent": sum(b["summe_cent"] for b in alle) if not produkt else sum(r["cent"] for r in liste),
+            "einnahmen_cent": sum(c for _, c in zahlungen),
+            "bestellungen": len(alle) if not produkt else len({b["id"] for b in alle if any(
+                passt(art.get(z["produkt_id"], "wurst"), z["produkt_id"]) for z in b["wurst"]) or (
+                passt("fleisch") and b["fleisch"])}),
+            "monate": sorted(monate.items()),
+            "preis_offen": preis_offen,
+        }
 
     def umsatz(self):
         with self.d._verbindung() as v:

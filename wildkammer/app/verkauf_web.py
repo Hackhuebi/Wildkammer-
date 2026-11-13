@@ -33,6 +33,8 @@ FEHLERTEXT = {
     "packung_unbekannt": "Diese Packung gibt es nicht",
     "packung_schon_raus": "Diese Packung wurde schon ausgebucht",
     "packung_nicht_raus": "Diese Packung ist noch im Lager",
+    "charge_unbekannt": "Charge nicht gefunden",
+    "name_fehlt": "Bitte einen Namen eingeben",
     "text_fehlt": "Bitte einen Text eingeben",
     "text_zu_lang": "Der Text ist zu lang (höchstens 500 Zeichen)",
     "vormerkung_unbekannt": "Notiz nicht gefunden",
@@ -463,6 +465,80 @@ Alles wird zusammen gebucht oder gar nichts.</p>
                      ziel=vk.einstellung("erinnerung_ziel"), handys=handys, handy_fehler=handy_fehler,
                      faellig=vk.ueberfaellig() if tage else [])
 
+    # ======================= Auswertung =======================
+    @app.get("/auswertung")
+    def auswertung():
+        from datetime import date, timedelta
+        heute = d.uhr().date()
+        monat1 = heute.replace(day=1)
+        vormonat_ende = monat1 - timedelta(days=1)
+        zeitraeume = [
+            ("Dieser Monat", monat1, heute),
+            ("Letzter Monat", vormonat_ende.replace(day=1), vormonat_ende),
+            ("Dieses Jahr", heute.replace(month=1, day=1), heute),
+            ("Letztes Jahr", date(heute.year - 1, 1, 1), date(heute.year - 1, 12, 31)),
+            ("Alles", date(2000, 1, 1), heute),
+        ]
+        von = request.args.get("von") or monat1.isoformat()
+        bis = request.args.get("bis") or heute.isoformat()
+        produkt = request.args.get("produkt", "")
+        try:
+            a = vk.auswertung(von, bis, produkt)
+        except Fehler:
+            return redirect(url_for("auswertung", m="Datum ungültig.", f=1), 303)
+        vorlage = """
+<div class="reiter">{% for name, v, b in zeitraeume %}
+<a class="{{ 'an' if von == v.isoformat() and bis == b.isoformat() }}"
+   href="{{ url_for('auswertung', von=v.isoformat(), bis=b.isoformat(), produkt=produkt) }}">{{ name }}</a>{% endfor %}</div>
+<form class="karte" method="get">
+  <div class="form-zeile">
+    <label>Von<input type="date" name="von" value="{{ von }}" required></label>
+    <label>Bis<input type="date" name="bis" value="{{ bis }}" required></label>
+  </div>
+  <div class="form-zeile" style="margin-top:10px">
+    <label style="flex:1">Produkt<select name="produkt" onchange="this.form.submit()">
+      <option value="">Alles</option>
+      {% for k, n in [('wurst', 'Nur Wurst'), ('honig', 'Nur Honig'), ('fleisch', 'Nur Fleisch')] %}
+      <option value="{{ k }}" {{ 'selected' if produkt == k }}>{{ n }}</option>{% endfor %}
+      <optgroup label="Einzelnes Produkt">{% for p in produkte %}
+      <option value="p:{{ p.id }}" {{ 'selected' if produkt == 'p:' ~ p.id }}>{{ p.name }}</option>{% endfor %}</optgroup>
+    </select></label>
+    <button class="neben">Anzeigen</button>
+  </div>
+</form>
+<div class="karte zahlen" style="margin-top:14px">
+  <div class="zahl"><b>{{ euro(a.umsatz_cent) }}</b><span class="leise">Umsatz{{ ' (vor Rabatt)' if produkt }}</span></div>
+  {% if not produkt %}<div class="zahl"><b>{{ euro(a.einnahmen_cent) }}</b><span class="leise">Einnahmen (Zahlungen)</span></div>{% endif %}
+  <div class="zahl"><b>{{ a.bestellungen }}</b><span class="leise">Bestellungen</span></div>
+  {% if not produkt and a.rabatt_cent %}<div class="zahl"><b>{{ euro(a.rabatt_cent) }}</b><span class="leise">Rabatte</span></div>{% endif %}
+</div>
+<p class="leise" style="margin:8px 4px">Umsatz zählt nach Bestelldatum, Einnahmen nach Tag der Zahlung.
+{% if produkt %}Rabatte gelten für ganze Bestellungen und sind beim Produktfilter nicht abgezogen.{% endif %}
+{% if a.preis_offen %}{{ a.preis_offen }} Fleischtüten ohne Preis sind mit 0 € gezählt.{% endif %}</p>
+<h2>Nach Produkt</h2>
+<div class="karte rollbar"><table class="knapp">
+{% for r in a.zeilen %}{% if loop.first or r.kategorie != loop.previtem.kategorie %}
+<tr class="gruppe"><th>{{ {'wurst': 'Wurst', 'honig': 'Honig', 'fleisch': 'Fleisch'}[r.kategorie] }}</th><th class="zahl">Menge</th><th class="zahl">Umsatz</th></tr>{% endif %}
+<tr><td class="umbruch">{{ r.name }}</td><td class="zahl">{{ r.menge }}</td><td class="zahl">{{ euro(r.cent) }}</td></tr>
+{% else %}<tr><td class="leise">Keine Verkäufe in diesem Zeitraum.</td></tr>{% endfor %}
+{% if a.zeilen %}<tr class="summe"><td><strong>Summe</strong></td><td></td><td style="text-align:right"><strong>{{ euro(a.brutto_cent) }}</strong></td></tr>
+{% if not produkt and a.rabatt_cent %}<tr><td class="leise" colspan="2">abzüglich Rabatte</td><td class="zahl leise">− {{ euro(a.rabatt_cent) }}</td></tr>{% endif %}{% endif %}
+</table></div>
+<h2>Nach Charge</h2>
+{% if chargen %}""" + CHARGEN + """{% else %}<div class="karte"><p class="leise" style="margin:0">Keine Chargen für diese Auswahl.</p></div>{% endif %}
+<p class="leise" style="margin:0 4px">Chargen gelten über ihre ganze Laufzeit, unabhängig vom Zeitraum oben.</p>
+{% if a.monate|length > 1 %}<h2>Nach Monat</h2>
+<div class="karte rollbar"><table class="knapp">
+<tr><th>Monat</th><th class="zahl">Umsatz</th>{% if not produkt %}<th class="zahl">Einnahmen</th>{% endif %}</tr>
+{% for m, w in a.monate %}<tr><td>{{ m[5:] }}.{{ m[:4] }}</td><td class="zahl">{{ euro(w.umsatz_cent) }}</td>
+  {% if not produkt %}<td class="zahl">{{ euro(w.einnahmen_cent) }}</td>{% endif %}</tr>{% endfor %}
+</table></div>{% endif %}"""
+        chargen = [c for c in vk.chargen() if (c["eingebucht"] or c["verkauft"] or c["kosten_cent"]) and (
+            not produkt or c["kategorie"] == produkt or produkt == f"p:{c['produkt_id']}")]
+        return seite(vorlage, "Auswertung", a=a, von=von, bis=bis, produkt=produkt, zeitraeume=zeitraeume,
+                     chargen=chargen, zeige_produkt=True,
+                     produkte=vk.produkte(nur_aktiv=False))
+
     # ======================= Notizen =======================
     NOTIZEN = """
 {% for n in notizen %}<div class="karte notiz">
@@ -808,6 +884,21 @@ Alles wird zusammen gebucht oder gar nichts.</p>
     def wurst_zugang(pid):
         return formular(("wurst", {}), lambda: f"Neuer Bestand: {vk.wurst_buchen(pid, request.form.get('menge'), 'zugang')}.")
 
+
+    CHARGEN = """
+<div class="karte rollbar"><table class="knapp">
+{% for c in chargen %}{% if zeige_produkt and (loop.first or c.produkt != loop.previtem.produkt) %}
+<tr class="gruppe"><th colspan="2">{{ c.produkt }}</th></tr>{% endif %}
+<tr><td class="umbruch"><b>{{ c.name }}</b><br>
+  <span class="leise">{{ c.eingebucht }} eingebucht · {{ c.verkauft }} verkauft{% if c.entnommen %} · {{ c.entnommen }} entnommen{% endif %} · {{ c.rest }} übrig</span>
+  {% if c.rabatt_cent %}<br><span class="leise">Rabatte anteilig {{ euro(c.rabatt_cent) }}</span>{% endif %}</td>
+  <td class="zahl" style="vertical-align:top">{{ euro(c.umsatz_cent) }}<br>
+  {% if c.gewinn_cent is not none %}<span class="marke {{ 'warn' if c.gewinn_cent < 0 }}">{{ '+' if c.gewinn_cent >= 0 }}{{ euro(c.gewinn_cent) }}</span>
+  {% else %}<span class="leise">Kosten fehlen</span>{% endif %}</td></tr>
+{% endfor %}</table></div>
+<p class="leise" style="margin:8px 4px">Umsatz nach Rabatt. Grün = Umsatz minus Kosten. Verkauft wird rechnerisch aus der
+ältesten Charge. Was noch übrig ist, bringt später weiteren Umsatz.</p>"""
+
     @app.get("/wurst/<int:pid>")
     def wurst_produkt(pid):
         p = vk.produkt(pid)
@@ -832,6 +923,24 @@ Alles wird zusammen gebucht oder gar nichts.</p>
   <button>Speichern</button>
 </form>
 <p class="leise">Ein neuer Preis gilt nur für neue Bestellungen.</p>
+<h2>Chargen</h2>""" + CHARGEN + """
+<details class="karte"><summary><b>Neue Charge beginnen</b></summary>
+<form method="post" action="{{ url_for('charge_neu', pid=p.id) }}">
+  <p class="leise">Alles, was ab jetzt eingebucht wird, gehört zur neuen Charge. Der Lagerbestand bleibt eine Zahl.</p>
+  <div class="form-zeile">
+    <label>Name<input name="name" placeholder="{{ p.name }} {{ monat }}" maxlength="80"></label>
+    <label>Kosten (€)<input name="kosten" inputmode="decimal" placeholder="z. B. 320,00"></label>
+  </div>
+  <p><button>Charge beginnen</button></p>
+</form></details>
+<details class="karte"><summary><b>Kosten oder Namen ändern</b></summary>
+{% for c in chargen %}<form class="form-zeile" method="post" action="{{ url_for('charge_aendern', pid=p.id, cid=c.id) }}"
+  style="padding:10px 0;{{ 'border-top:1px solid var(--linie)' if not loop.first }}">
+  <label>Name<input name="name" value="{{ c.name }}" required maxlength="80"></label>
+  <label>Kosten (€)<input name="kosten" inputmode="decimal"
+    value="{{ ('%.2f' % (c.kosten_cent / 100)).replace('.', ',') if c.kosten_cent is not none else '' }}"></label>
+  <button class="neben">Speichern</button>
+</form>{% endfor %}</details>
 <h2>Inventurkorrektur</h2>
 <form class="karte form-zeile" method="post" action="{{ url_for('wurst_korrektur', pid=p.id) }}">
   <label>Abweichung (z. B. -2)<input name="menge" type="number" required></label>
@@ -842,7 +951,20 @@ Alles wird zusammen gebucht oder gar nichts.</p>
 <div class="karte rollbar"><table><tr><th>Zeit</th><th class="zahl">Menge</th><th>Art</th><th>Grund</th></tr>
 {% for b in bewegungen %}<tr><td>{{ b.erstellt[:16].replace('T', ' ') }}</td><td class="zahl">{{ '%+d' % b.menge }}</td>
 <td>{{ b.art }}</td><td>{{ b.grund }}</td></tr>{% endfor %}</table></div>"""
-        return seite(vorlage, p["name"], p=p, bewegungen=vk.bewegungen(pid, 50))
+        return seite(vorlage, p["name"], p=p, bewegungen=vk.bewegungen(pid, 50), chargen=vk.chargen(pid),
+                     zeige_produkt=False, monat=f"{d.uhr():%m/%Y}")
+
+    @app.post("/wurst/<int:pid>/charge")
+    def charge_neu(pid):
+        f = request.form
+        return formular(("wurst_produkt", {"pid": pid}),
+                        lambda: (vk.charge_neu(pid, f.get("name"), f.get("kosten")), "Neue Charge begonnen.")[1])
+
+    @app.post("/wurst/<int:pid>/charge/<int:cid>")
+    def charge_aendern(pid, cid):
+        f = request.form
+        return formular(("wurst_produkt", {"pid": pid}),
+                        lambda: (vk.charge_aendern(cid, f.get("name"), f.get("kosten")), "Charge gespeichert.")[1])
 
     @app.post("/wurst/<int:pid>/aendern")
     def wurst_aendern(pid):
@@ -1002,6 +1124,7 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
   <div class="zahl"><b>{{ u.nicht_ausgeliefert }}</b><span class="leise">nicht ausgeliefert</span></div>
 </div>
 {% if u.preis_offen %}<p class="leise">{{ u.preis_offen }} Bestellung(en) enthalten Fleisch ohne Preis („+“).</p>{% endif %}
+<p class="leise" style="margin:8px 4px 0;text-align:right"><a href="{{ url_for('auswertung') }}">Umsatz nach Zeitraum und Produkt ›</a></p>
 <div class="zeile" style="margin:12px 0"><a class="knopf" href="{{ url_for('bestellung_neu') }}">Neue Bestellung</a>
   <a class="knopf" href="{{ url_for('packliste') }}">Packliste</a>
   <a class="knopf" href="{{ url_for('notizen') }}">Notizen{% if anzahl_notizen %} ({{ anzahl_notizen }}){% endif %}</a></div>
@@ -1042,11 +1165,12 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
 <a class="zurueck" href="{{ url_for('bestellungen') }}">{{ pfeil|safe }} Zurück zu den Bestellungen</a>
 <form method="post">
 <div class="karte form-zeile">
-  <label>Kunde<select name="kunde" required>
-    <option value="" disabled {{ 'selected' if not vorauswahl }}>Bitte wählen</option>
+  <label>Kunde<select name="kunde" required onchange="document.getElementById('neuer-kunde').hidden = this.value !== 'neu'">
+    <option value="neu" {{ 'selected' if not vorauswahl }}>Neuer Kunde …</option>
     {% for k in kunden %}<option value="{{ k.id }}" {{ 'selected' if vorauswahl == k.id }}>{{ k.name }}</option>{% endfor %}
-    <option value="neu">Neuer Kunde …</option></select></label>
-  <label>Name bei neuem Kunden<input name="neuer_kunde" maxlength="80"></label>
+    </select></label>
+  <label id="neuer-kunde" {{ 'hidden' if vorauswahl }}>Name des neuen Kunden<input name="neuer_kunde" maxlength="80"
+    autocomplete="off" {{ 'autofocus' if not vorauswahl }}></label>
 </div>
 <h2>Wurst und Honig</h2>
 <div class="karte rollbar"><table class="knapp">
@@ -1341,6 +1465,13 @@ document.querySelectorAll("select[data-ziel]").forEach(function (s) {
         except ValueError:
             raise Fehler("vormerkung_unbekannt")
 
+    def charge_neu_api(x):
+        pid = vk.produkt_finden(x.get("produkt"))["id"]
+        cid = vk.charge_neu(pid, x.get("name"), x.get("kosten") or None)
+        c = next(c for c in vk.chargen(pid) if c["id"] == cid)
+        return {"charge": {"produkt": c["produkt"], "name": c["name"],
+                           "kosten": euro(c["kosten_cent"]) if c["kosten_cent"] is not None else ""}}
+
     def aendern_api(x):
         oid = int(bestellnummer(x))
         mengen, neu = {}, {}
@@ -1378,6 +1509,15 @@ document.querySelectorAll("select[data-ziel]").forEach(function (s) {
             x.get("name"), x.get("telefon"), notiz=x.get("notiz")))),
         "bestellung_anlegen": bestellung_api,
         "bestellung_aendern": aendern_api,
+        "charge_neu": charge_neu_api,
+        "chargen": lambda x: {"chargen": [
+            {"produkt": c["produkt"], "charge": c["name"], "eingebucht": c["eingebucht"], "verkauft": c["verkauft"],
+             "entnommen": c["entnommen"], "uebrig": c["rest"], "umsatz": euro(c["umsatz_cent"]),
+             "rabatte": euro(c["rabatt_cent"]),
+             "kosten": euro(c["kosten_cent"]) if c["kosten_cent"] is not None else "",
+             "gewinn": euro(c["gewinn_cent"]) if c["gewinn_cent"] is not None else ""}
+            for c in vk.chargen(vk.produkt_finden(x["produkt"])["id"] if x.get("produkt") else None)
+            if c["eingebucht"] or c["verkauft"] or c["kosten_cent"]]},
         "notiz": lambda x: {"notiz": _notiz_kurz(vk.vormerkung_anlegen(
             x.get("text"), kunde_id=x.get("kunde_id"), kunde=x.get("kunde")))},
         "notizen": lambda x: {"notizen": [_notiz_kurz(n) for n in vk.vormerkungen()]},

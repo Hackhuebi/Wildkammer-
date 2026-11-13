@@ -588,6 +588,62 @@ wildkammer_verkauf:
           ergebnis: "{{ antwort.content }}"
       - stop: Fertig
         response_variable: ergebnis
+    wildkammer_charge_neu:
+      alias: Wildkammer neue Charge
+      description: Beginnt eine neue Charge für ein Wurst- oder Honigprodukt, z. B. wenn neue Salami kommt, obwohl noch alte da ist. Alles, was danach eingebucht wird, gehört zur neuen Charge. Danach die Menge mit Wurst einbuchen buchen. Kosten der Charge in Euro, wenn genannt.
+      mode: queued
+      max: 20
+      fields:
+        produkt:
+          name: produkt
+          description: Wurst- oder Honigprodukt
+          required: true
+          selector:
+            text:
+        name:
+          name: name
+          description: Name der Charge, optional
+          required: false
+          selector:
+            text:
+        kosten:
+          name: kosten
+          description: Gesamtkosten der Charge in Euro, optional
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: charge_neu
+          daten: "{{ {'produkt': produkt | default(''), 'name': name | default(''), 'kosten': kosten | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
+    wildkammer_chargen:
+      alias: Wildkammer Chargen
+      description: Zeigt je Charge eingebucht, verkauft, entnommen, übrig, Umsatz nach Rabatt, Rabatte, Kosten und Gewinn.
+      mode: queued
+      max: 20
+      fields:
+        produkt:
+          name: produkt
+          description: Wurst- oder Honigprodukt, optional
+          required: false
+          selector:
+            text:
+      sequence:
+      - action: rest_command.wildkammer_verkauf
+        data:
+          aktion: chargen
+          daten: "{{ {'produkt': produkt | default('')} }}"
+        response_variable: antwort
+      - variables:
+          ergebnis: "{{ antwort.content }}"
+      - stop: Fertig
+        response_variable: ergebnis
     wildkammer_lieferung_zuruecknehmen:
       alias: Wildkammer Lieferung zurücknehmen
       description: Macht eine versehentlich gebuchte Auslieferung rückgängig. Die Ware kommt zurück ins Lager, die Bestellung ist wieder offen. Nur nach ausdrücklicher Bestätigung des Nutzers.
