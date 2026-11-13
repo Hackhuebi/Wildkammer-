@@ -135,7 +135,7 @@ SYMBOLE = {
 }
 
 # Welcher Reiter unten leuchtet: nach dem ersten Pfadteil.
-BEREICH = {"": "heute", "fleisch": "fleisch", "s": "fleisch", "wurst": "wurst", "w": "wurst", "preise": "wurst",
+BEREICH = {"": "heute", "heute": "heute", "fleisch": "fleisch", "s": "fleisch", "wurst": "wurst", "w": "wurst", "preise": "wurst",
            "bestellungen": "bestellungen", "packliste": "bestellungen",
            "kunden": "mehr", "scan": "mehr", "sicherung": "mehr", "mehr": "mehr"}
 

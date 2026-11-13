@@ -61,3 +61,37 @@ def test_notizen_unter_ingress(c):
     api(c, "notiz", text="Test")
     html = c.get("/notizen", headers={"X-Ingress-Path": pfad}).get_data(as_text=True)
     assert f'action="{pfad}/notizen/neu"' in html and f'action="{pfad}/notizen/1/erledigt"' in html
+
+
+def test_startseite_reihenfolge(c):
+    zugang(c, "Salami", 3)
+    bestellung(c, "Erik Probst", [{"produkt": "Salami", "menge": 2}])
+    api(c, "notiz", text="Ein ganzes Schwein")
+    html = c.get("/").get_data(as_text=True)
+    # Standard: Notizen ganz unten
+    assert html.index("<h2>Zu liefern</h2>") < html.index("<h2>Notizen</h2>") < html.index("Neue Bestellung</a>")
+    for _ in range(5):
+        c.post("/heute/anpassen", data={"baustein": "notizen", "tun": "hoch"})
+    html = c.get("/").get_data(as_text=True)
+    assert html.index("<h2>Notizen</h2>") < html.index("<h2>Zu liefern</h2>")
+    c.post("/heute/anpassen", data={"baustein": "zuliefern", "tun": "umschalten"})
+    html = c.get("/").get_data(as_text=True)
+    assert "<h2>Zu liefern</h2>" not in html and "<h2>Notizen</h2>" in html
+    seite = c.get("/heute/anpassen").get_data(as_text=True)
+    assert "line-through" in seite and 'class="an"' in seite
+    c.post("/heute/anpassen", data={"tun": "zuruecksetzen"})
+    html = c.get("/").get_data(as_text=True)
+    assert html.index("<h2>Zu liefern</h2>") < html.index("<h2>Notizen</h2>")
+    assert c.post("/heute/anpassen", data={"baustein": "quatsch", "tun": "hoch"}).status_code == 303
+
+
+def test_bestellliste_zeigt_positionen(c):
+    zugang(c, "Salami", 3)
+    zugang(c, "Knacker", 1)
+    c.post("/api/wildart", json={"art": "Reh"})
+    t = c.post("/api/anlegen", json={"teil": "Rücken"}).get_json()
+    c.post(f"/api/gedruckt/{int(t['nummer'])}")
+    bestellung(c, "Erik Probst", [{"produkt": "Salami", "menge": 2}, {"produkt": "Knacker", "menge": 1},
+                                  {"wildart": "Reh", "teil": "Rücken", "menge": 1}])
+    html = c.get("/bestellungen").get_data(as_text=True)
+    assert '<span class="posten">2× Salami, 1× Knacker, Reh Rücken</span>' in html

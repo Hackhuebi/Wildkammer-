@@ -87,6 +87,7 @@ button.st:disabled { opacity:.25; }
 .modus label:has(input:checked).gruen { background:var(--akzent); color:var(--akzent-text); }
 tr.gruppe th { padding-top:18px; font-size:.8rem; color:var(--text); }
 .karte.notiz { border-left:4px solid #d4a017; }
+span.posten { display:block; font-size:.86rem; line-height:1.35; margin:2px 0; white-space:normal; }
 tr.summe td { border-top:2px solid var(--linie); }
 tr.weniger td { background:color-mix(in srgb, var(--warn) 10%, transparent); }
 tr.gewaehlt td { background:color-mix(in srgb, var(--akzent) 12%, transparent); }
@@ -287,9 +288,8 @@ Alles wird zusammen gebucht oder gar nichts.</p>
         im_lager = d.liste(status="lager")
         jetzt = d.uhr()
         tage = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
-        vorlage = """
-<p class="leise" style="margin:-4px 4px 14px">{{ datum_text }}</p>
-{% if pliste %}<h2>Packliste</h2>
+        bausteine = {
+            "packliste": """{% if pliste %}<h2>Packliste</h2>
 <a href="{{ url_for('packliste') }}" class="karte" style="display:block;text-decoration:none;color:inherit">
   <table class="knapp">
   {% for name, n in pwurst %}<tr><td class="umbruch">{{ name }}</td><td class="r"><b>{{ n }}</b></td></tr>{% endfor %}
@@ -297,9 +297,8 @@ Alles wird zusammen gebucht oder gar nichts.</p>
   </table>
   <p class="leise" style="margin:10px 0 0">Für {{ pliste|map(attribute='kunde')|join(', ') }} · <span style="color:var(--akzent);font-weight:650">Öffnen ›</span></p>
 </a>{% endif %}
-{% if notizen %}<h2>Notizen</h2>""" + NOTIZEN + """
-<p class="leise" style="margin:8px 4px"><a href="{{ url_for('notizen') }}">Alle Notizen und neue Notiz ›</a></p>{% endif %}
-{% if entwuerfe or alte or knapp or faellig %}<h2>Hinweise</h2>
+""",
+            "hinweise": """{% if entwuerfe or alte or knapp or faellig %}<h2>Hinweise</h2>
 <div class="karte" style="padding:4px 14px"><ul class="menue">
   {% if faellig %}<li><a href="{{ url_for('erinnerung_seite') }}"><span class="marke warn">{{ faellig|length }}</span>
     <span>{{ 'Lieferung' if faellig|length == 1 else 'Lieferungen' }} seit über {{ erinnerung_tage }} Tagen unbezahlt<br>
@@ -311,14 +310,16 @@ Alles wird zusammen gebucht oder gar nichts.</p>
   {% if knapp %}<li><a href="{{ url_for('wurst') }}"><span class="marke warn">{{ knapp|length }}</span>
     <span>Wird knapp<br><span class="leise" style="font-weight:400">{% for p in knapp %}{{ p.name }} ({{ [p.frei, 0]|max }} frei){{ ', ' if not loop.last }}{% endfor %}</span></span></a></li>{% endif %}
 </ul></div>{% endif %}
-<div class="karte zahlen" style="margin-top:14px">
+""",
+            "zahlen": """<div class="karte zahlen" style="margin-top:22px">
   <div class="zahl"><b>{{ offen|length }}</b><span class="leise">Bestellungen zu liefern</span></div>
   <div class="zahl"><b>{{ euro(schulden|sum(attribute='offen_cent')) }}</b><span class="leise">noch zu kassieren</span></div>
   <div class="zahl"><b>{{ produkte|selectattr('kategorie', 'equalto', 'wurst')|sum(attribute='frei') }}</b><span class="leise">Wurst frei (Packungen)</span></div>
   <div class="zahl"><b>{{ produkte|selectattr('kategorie', 'equalto', 'honig')|sum(attribute='frei') }}</b><span class="leise">Honig frei (Gläser)</span></div>
   <div class="zahl"><b>{{ im_lager|length }}</b><span class="leise">Fleischtüten im Lager</span></div>
 </div>
-<h2>Zu liefern</h2>
+""",
+            "zuliefern": """<h2>Zu liefern</h2>
 {% if offen %}<div class="karte" style="padding:4px 14px"><ul class="menue">
   {% for b in offen[:8] %}<li><a href="{{ url_for('bestellung', oid=b.id) }}"><span style="min-width:0">{{ b.kunde }}
     <span class="leise" style="font-weight:400">#{{ b.id }}</span><br>
@@ -328,19 +329,74 @@ Alles wird zusammen gebucht oder gar nichts.</p>
 {% if offen|length > 8 %}<p class="leise" style="margin:8px 4px"><a href="{{ url_for('bestellungen', filter='nicht_ausgeliefert') }}">Alle {{ offen|length }} anzeigen</a></p>{% endif %}
 {% if not pliste %}<p><a class="knopf" href="{{ url_for('packliste', neu=1) }}">Packliste erstellen</a></p>{% endif %}
 {% else %}<div class="karte"><p class="leise" style="margin:0">Alles ausgeliefert.</p></div>{% endif %}
-{% if schulden %}<h2>Noch zu kassieren</h2>
+""",
+            "kassieren": """{% if schulden %}<h2>Noch zu kassieren</h2>
 <div class="karte rollbar"><table class="knapp">
 {% for k in schulden[:8] %}<tr><td class="umbruch"><a href="{{ url_for('kunde', kid=k.id) }}">{{ k.name }}</a></td>
   <td class="zahl">{{ euro(k.offen_cent) }}</td></tr>{% endfor %}
 </table></div>
 {% if schulden|length > 8 %}<p class="leise" style="margin:8px 4px"><a href="{{ url_for('bestellungen', filter='unbezahlt') }}">Alle unbezahlten Bestellungen</a></p>{% endif %}{% endif %}
-<p><a class="knopf" href="{{ url_for('bestellung_neu') }}" style="margin-top:20px">Neue Bestellung</a></p>"""
+""",
+            "notizen": """{% if notizen %}<h2>Notizen</h2>""" + NOTIZEN + """
+<p class="leise" style="margin:8px 4px"><a href="{{ url_for('notizen') }}">Alle Notizen und neue Notiz ›</a></p>{% endif %}
+""",
+        }
+        vorlage = ('<p class="leise" style="margin:-4px 4px 14px">{{ datum_text }}</p>'
+                   + "".join(bausteine[k] for k in _startseite()[0])
+                   + """<p><a class="knopf" href="{{ url_for('bestellung_neu') }}" style="margin-top:20px">Neue Bestellung</a></p>
+<p class="leise" style="text-align:center;margin-top:18px"><a href="{{ url_for('startseite_anpassen') }}">Startseite anpassen</a></p>""")
         pliste, pwurst, pfleisch = _packliste(vk.packliste_ids())
         erinnerung_tage = int(vk.einstellung("erinnerung_tage") or 0)
         return seite(vorlage, "Heute", faellig=vk.ueberfaellig(erinnerung_tage) if erinnerung_tage else [],
                      erinnerung_tage=erinnerung_tage, notizen=vk.vormerkungen(anzahl=5), notiz_zurueck="heute", pliste=pliste, pwurst=pwurst, pfleisch=pfleisch, offen=offen, produkte=produkte, knapp=knapp, schulden=schulden,
                      im_lager=im_lager, entwuerfe=d.entwuerfe(), alte=d.alte_tueten(),
                      datum_text=f"{tage[jetzt.weekday()]}, {jetzt:%d.%m.%Y}")
+
+    STARTSEITE = [("packliste", "Packliste"), ("hinweise", "Hinweise"), ("zahlen", "Kennzahlen"),
+                  ("zuliefern", "Zu liefern"), ("kassieren", "Noch zu kassieren"), ("notizen", "Notizen")]
+
+    def _startseite():
+        """(sichtbare Bausteine in Reihenfolge, ausgeblendete)"""
+        alle = [k for k, _ in STARTSEITE]
+        reihe = [k for k in vk.einstellung("heute_reihenfolge").split(",") if k in alle]
+        reihe += [k for k in alle if k not in reihe]
+        aus = {k for k in vk.einstellung("heute_aus").split(",") if k in alle}
+        return [k for k in reihe if k not in aus], aus, reihe
+
+    @app.route("/heute/anpassen", methods=["GET", "POST"])
+    def startseite_anpassen():
+        _, aus, reihe = _startseite()
+        if request.method == "POST":
+            k, tun = request.form.get("baustein"), request.form.get("tun")
+            if k in reihe:
+                i = reihe.index(k)
+                if tun == "hoch" and i > 0:
+                    reihe[i - 1], reihe[i] = reihe[i], reihe[i - 1]
+                elif tun == "runter" and i < len(reihe) - 1:
+                    reihe[i + 1], reihe[i] = reihe[i], reihe[i + 1]
+                elif tun == "umschalten":
+                    aus ^= {k}
+            if tun == "zuruecksetzen":
+                reihe, aus = [k for k, _ in STARTSEITE], set()
+            vk.einstellung_setzen("heute_reihenfolge", ",".join(reihe))
+            vk.einstellung_setzen("heute_aus", ",".join(sorted(aus)))
+            return redirect(url_for("startseite_anpassen"), 303)
+        namen = dict(STARTSEITE)
+        vorlage = """
+<a class="zurueck" href="{{ url_for('heute') }}">{{ pfeil|safe }} Zurück zu Heute</a>
+<p class="leise" style="margin:0 4px 10px">Reihenfolge mit den Pfeilen ändern, mit dem Schalter ein- oder ausblenden.</p>
+<div class="karte" style="padding:4px 14px">
+{% for k in reihe %}<div style="display:flex;align-items:center;gap:8px;padding:8px 0;{{ 'border-top:1px solid var(--linie)' if not loop.first }}">
+  <span style="flex:1;font-weight:650;{{ 'opacity:.4;text-decoration:line-through' if k in aus }}">{{ bausteinnamen[k] }}</span>
+  <form method="post"><input type="hidden" name="baustein" value="{{ k }}">
+    <button class="neben klein" name="tun" value="hoch" aria-label="{{ bausteinnamen[k] }} nach oben" {{ 'disabled' if loop.first }}>↑</button>
+    <button class="neben klein" name="tun" value="runter" aria-label="{{ bausteinnamen[k] }} nach unten" {{ 'disabled' if loop.last }}>↓</button>
+    <button class="klein {{ 'neben' if k in aus }}" name="tun" value="umschalten" style="min-width:86px">{{ 'Aus' if k in aus else 'An' }}</button>
+  </form>
+</div>{% endfor %}
+</div>
+<form method="post" style="margin-top:14px"><button class="neben" name="tun" value="zuruecksetzen" style="width:100%">Standard wiederherstellen</button></form>"""
+        return seite(vorlage, "Startseite", reihe=reihe, aus=aus, bausteinnamen=namen)
 
     # ======================= Zahlungserinnerung =======================
     @app.route("/erinnerung", methods=["GET", "POST"])
@@ -916,6 +972,7 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
 <tr><th>Bestellung</th><th class="zahl">Summe</th><th>Status</th></tr>
 {% for b in liste %}<tr>
   <td class="umbruch"><a href="{{ url_for('bestellung', oid=b.id) }}"><b>{{ b.kunde }}</b></a><br>
+    <span class="posten">{% for z in b.wurst %}{{ z.menge }}× {{ z.produktname }}{{ ', ' if not loop.last or b.fleisch }}{% endfor %}{% for f in b.fleisch %}{{ f.art }} {{ f.teil }}{{ ', ' if not loop.last }}{% endfor %}</span><br>
     <span class="leise">#{{ b.id }} · {{ de(b.datum) }}</span></td>
   <td class="zahl">{{ euro(b.summe_cent) }}{% if b.preis_offen %} +{% endif %}</td>
   <td><div class="status">{% if b.status == 'storniert' %}<span class="leise">storniert</span>{% else %}
