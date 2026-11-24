@@ -232,6 +232,8 @@ class Verkauf:
                 v.execute("UPDATE bestellungen SET ausgeliefert_am = COALESCE("
                           "(SELECT MAX(a.datum) FROM auslieferungen a WHERE a.bestellung_id = bestellungen.id), "
                           "datum || 'T12:00:00') WHERE status = 'ausgeliefert'")
+            if "quittiert" not in [z[1] for z in v.execute("PRAGMA table_info(bestellungen)")]:
+                v.execute("ALTER TABLE bestellungen ADD COLUMN quittiert INTEGER NOT NULL DEFAULT 0")
             # Honig kam später dazu: gleiche Tabelle, Produkte haben eine Kategorie.
             if "kategorie" not in [z[1] for z in v.execute("PRAGMA table_info(wurstprodukte)")]:
                 v.execute("ALTER TABLE wurstprodukte ADD COLUMN kategorie TEXT NOT NULL DEFAULT 'wurst'")
@@ -688,7 +690,9 @@ class Verkauf:
         b["bezahlt_cent"] = v.execute("SELECT COALESCE(SUM(betrag_cent), 0) FROM zahlungen WHERE bestellung_id = ?",
                                       (oid,)).fetchone()[0]
         b["offen_cent"] = 0 if b["status"] == "storniert" else max(summe - b["bezahlt_cent"], 0)
-        b["bezahlt"] = b["status"] != "storniert" and b["bezahlt_cent"] >= summe and not b["preis_offen"]
+        # 0-€-Bestellungen gelten erst als bezahlt, wenn jemand "bezahlt" getippt hat (vergessener Preis fällt sonst nicht auf)
+        b["bezahlt"] = (b["status"] != "storniert" and b["bezahlt_cent"] >= summe and not b["preis_offen"]
+                        and (summe > 0 or bool(b.get("quittiert"))))
         name = v.execute("SELECT wert FROM einstellungen WHERE schluessel = 'paypal'").fetchone()
         b["paypal_link"] = (f"https://paypal.me/{name[0]}/{b['offen_cent'] // 100}.{b['offen_cent'] % 100:02d}EUR"
                             if name and name[0] and b["offen_cent"] > 0 and not b["preis_offen"] else "")
@@ -719,6 +723,8 @@ class Verkauf:
             if b["preis_offen"]:
                 raise Fehler("preis_offen", hinweis="Für Fleisch ohne Kilopreis den Betrag nennen")
             cent = offen
+        if cent <= 0 and b["summe_cent"] == 0 and not b["preis_offen"]:
+            return self._quittieren(oid)
         if cent <= 0:
             raise Fehler("nichts_offen")
         if cent > offen and not b["preis_offen"]:
@@ -726,6 +732,12 @@ class Verkauf:
         with self.d._verbindung() as v:
             v.execute("INSERT INTO zahlungen(bestellung_id, betrag_cent, datum, methode, notiz) VALUES(?, ?, ?, ?, ?)",
                       (oid, cent, self._jetzt(), (methode or "")[:40], (notiz or "")[:200]))
+        return self.bestellung(oid)
+
+    def _quittieren(self, oid):
+        """Bestellung ohne Betrag (z. B. geschenkt) bewusst als erledigt abhaken."""
+        with self.d._verbindung() as v:
+            v.execute("UPDATE bestellungen SET quittiert = 1 WHERE id = ?", (oid,))
         return self.bestellung(oid)
 
     def bezahlt_mit(self, oid, betrag, methode=""):
@@ -741,6 +753,8 @@ class Verkauf:
             # Ohne vollständigen Preis gibt es keinen Rest, der erlassen werden könnte
             return self.zahlung(oid, betrag, methode) if cent else b
         offen = b["summe_cent"] - b["bezahlt_cent"]
+        if b["summe_cent"] == 0 and cent == 0:
+            return self._quittieren(oid)
         if offen <= 0:
             raise Fehler("nichts_offen")
         if cent > offen:

@@ -34,10 +34,19 @@ def test_paypal_name_pruefen(c):
     assert 'value=""' in c.get("/erinnerung").get_data(as_text=True)
 
 
-def test_null_euro_bestellung_gilt_als_bezahlt(c):
-    zugang(c, "Rapshonig", 2)  # Preis 0 €
+def test_null_euro_bestellung_erst_nach_tippen_bezahlt(c):
+    zugang(c, "Rapshonig", 3)  # Preis 0 €
     a = bestellung(c, "Greta", [{"produkt": "Raps", "menge": 1}])
     c.post(f"/bestellungen/{a}/ausgeliefert")
-    assert api(c, "bestellungen", kunde="Greta")["anzahl"] == 0          # nicht mehr offen
+    # Fällt auf: steht weiter als unbezahlt da
+    assert api(c, "bestellungen", kunde="Greta")["anzahl"] == 1
+    r = c.post(f"/bestellungen/{a}/bezahlt")
+    assert "f=1" not in r.headers["Location"]
+    assert api(c, "bestellungen", kunde="Greta")["anzahl"] == 0
     assert api(c, "bestellungen", filter="abgeschlossen")["anzahl"] == 1
-    assert "Greta" not in c.get("/").get_data(as_text=True)
+    # Auch über "Erhalten 0 € – Erledigt" und über Claude
+    b = bestellung(c, "Ben", [{"produkt": "Raps", "menge": 1}])
+    c.post(f"/bestellungen/{b}/erhalten", data={"betrag": "0,00", "art": "fertig"})
+    assert api(c, "bestellungen", kunde="Ben", filter="unbezahlt")["anzahl"] == 0
+    d = bestellung(c, "Lena", [{"produkt": "Raps", "menge": 1}])
+    assert api(c, "bezahlt", bestellung_id=d)["bestellung"]["vollstaendig_bezahlt"]
