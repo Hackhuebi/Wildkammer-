@@ -145,6 +145,7 @@ def kurz(b):
         "rabatt": euro(b["rabatt_cent"]) if b["rabatt_cent"] else "",
         "bezahlt": euro(b["bezahlt_cent"]), "offen": euro(b["offen_cent"]),
         "vollstaendig_bezahlt": b["bezahlt"], "ausgeliefert": b["status"] == "ausgeliefert",
+        "paypal_link": b.get("paypal_link", ""),
     }
 
 
@@ -426,6 +427,12 @@ Alles wird zusammen gebucht oder gar nichts.</p>
             vk.einstellung_setzen("erinnerung_tage", tage)
             vk.einstellung_setzen("erinnerung_uhrzeit", uhrzeit)
             vk.einstellung_setzen("erinnerung_ziel", (f.get("ziel") or "").strip())
+            paypal = (f.get("paypal") or "").strip()
+            # Auch ein ganzer Link wird angenommen: https://paypal.me/name → name
+            paypal = re.sub(r"^(https?://)?(www\.)?paypal\.me/", "", paypal).strip("/").split("/")[0]
+            if paypal and not re.fullmatch(r"[A-Za-z0-9._-]{1,40}", paypal):
+                return redirect(url_for("erinnerung_seite", m="PayPal-Name ungültig.", f=1), 303)
+            vk.einstellung_setzen("paypal", paypal)
             # nach einer Änderung darf heute noch einmal erinnert werden
             vk.einstellung_setzen("erinnerung_zuletzt", "")
             return redirect(url_for("erinnerung_seite", m="Gespeichert."), 303)
@@ -436,7 +443,10 @@ Alles wird zusammen gebucht oder gar nichts.</p>
         tage = int(vk.einstellung("erinnerung_tage") or 0)
         vorlage = """
 <form class="karte" method="post">
-  <p class="leise" style="margin-top:0">Einmal am Tag eine Nachricht aufs Handy, wenn gelieferte Bestellungen
+  <label>PayPal.me-Name<input name="paypal" value="{{ paypal }}" placeholder="z. B. hackhuebi oder ganzer Link"
+    autocapitalize="off" autocorrect="off"></label>
+  <p class="leise">Damit bekommt jede offene Bestellung einen PayPal-Link mit dem richtigen Betrag.</p>
+  <p class="leise" style="margin-top:18px">Einmal am Tag eine Nachricht aufs Handy, wenn gelieferte Bestellungen
   länger als eingestellt nicht bezahlt sind. 0 Tage schaltet die Erinnerung aus.</p>
   <div class="form-zeile">
     <div class="feld">Nach Tagen<input name="tage" type="number" min="0" max="60" value="{{ tage }}" data-stepper aria-label="Tage"></div>
@@ -461,7 +471,7 @@ Alles wird zusammen gebucht oder gar nichts.</p>
     <span class="rechts"><span class="marke warn">{{ euro(b.offen_cent) }}</span></span></a></li>{% endfor %}
 </ul></div>
 {% else %}<div class="karte"><p class="leise" style="margin:0">Nichts überfällig.</p></div>{% endif %}"""
-        return seite(vorlage, "Zahlungserinnerung", tage=tage, uhrzeit=vk.einstellung("erinnerung_uhrzeit"),
+        return seite(vorlage, "Zahlungen", paypal=vk.einstellung("paypal"), tage=tage, uhrzeit=vk.einstellung("erinnerung_uhrzeit"),
                      ziel=vk.einstellung("erinnerung_ziel"), handys=handys, handy_fehler=handy_fehler,
                      faellig=vk.ueberfaellig() if tage else [])
 
@@ -1227,6 +1237,39 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
       <button class="gross neben">Alles ausliefern</button></form>{% endif %}
   </div>{% endif %}
 </div>
+{% if b.status != 'storniert' and not b.bezahlt and b.offen_cent > 0 %}
+<h2>PayPal</h2>
+{% if paypal_link %}<div class="karte">
+  <p style="margin-top:0;word-break:break-all"><a href="{{ paypal_link }}">{{ paypal_link }}</a></p>
+  <textarea id="pp-text" rows="4" style="width:100%;font-size:.9rem">{{ paypal_text }}</textarea>
+  <div class="zeile" style="margin-top:8px">
+    <button type="button" id="pp-teilen">Nachricht senden …</button>
+    <button type="button" class="neben" id="pp-kopieren">Kopieren</button>
+  </div>
+  <p class="leise" id="pp-hinweis" hidden></p>
+</div>
+<script>
+(function () {
+  var t = document.getElementById("pp-text"), h = document.getElementById("pp-hinweis");
+  function melden(x) { h.textContent = x; h.hidden = false; }
+  function kopieren() {
+    var ok = function () { melden("✓ Kopiert. In WhatsApp oder SMS einfügen."); };
+    var hand = function () {
+      t.focus(); t.select(); t.setSelectionRange(0, t.value.length);
+      var g = false; try { g = document.execCommand("copy"); } catch (e) {}
+      g ? ok() : melden("Bitte Text lange drücken, „Alles auswählen“, „Kopieren“.");
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t.value).then(ok, hand); else hand();
+  }
+  document.getElementById("pp-kopieren").addEventListener("click", kopieren);
+  document.getElementById("pp-teilen").addEventListener("click", function () {
+    if (navigator.share) navigator.share({ text: t.value }).catch(function () {}); else kopieren();
+  });
+})();
+</script>
+{% else %}<div class="karte"><p class="leise" style="margin:0">Trag einmal deinen PayPal.me-Namen unter
+  <a href="{{ url_for('erinnerung_seite') }}">Mehr → Zahlungen</a> ein, dann steht hier ein Link mit dem Betrag.</p></div>{% endif %}
+{% endif %}
 {% if b.status != 'storniert' and not b.bezahlt %}
 <h2>Zahlung</h2>
 <form class="karte" method="post" action="{{ url_for('bestellung_erhalten', oid=b.id) }}">
@@ -1323,7 +1366,14 @@ document.querySelectorAll("select[data-ziel]").forEach(function (s) {
   <button class="gefahr">Bestellung stornieren</button></form>{% endif %}"""
         geliefert_teil = b["status"] == "offen" and (any(z["ausgeliefert"] for z in b["wurst"])
                                                       or any(f["ausgeliefert"] for f in b["fleisch"]))
+        link = b["paypal_link"]
+        vorname = b["kunde"].split(" ")[0]
+        posten = ", ".join([f"{z['menge']}× {z['produktname']}" for z in b["wurst"]]
+                           + [f"{f['art']} {f['teil']}" for f in b["fleisch"]])
+        paypal_text = (f"Hallo {vorname}, für deine Bestellung ({posten}) sind noch {euro(b['offen_cent'])} offen. "
+                       f"Du kannst gern per PayPal zahlen: {link} Danke!") if link else ""
         return seite(vorlage, f"Bestellung {oid}", b=b, geliefert_teil=geliefert_teil,
+                     paypal_link=link, paypal_text=paypal_text,
                      produkte=vk.produkte() if b["status"] == "offen" else [],
                      fleisch=vk.fleisch_frei() if b["status"] == "offen" else [])
 

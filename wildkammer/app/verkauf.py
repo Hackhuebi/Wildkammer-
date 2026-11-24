@@ -688,7 +688,10 @@ class Verkauf:
         b["bezahlt_cent"] = v.execute("SELECT COALESCE(SUM(betrag_cent), 0) FROM zahlungen WHERE bestellung_id = ?",
                                       (oid,)).fetchone()[0]
         b["offen_cent"] = 0 if b["status"] == "storniert" else max(summe - b["bezahlt_cent"], 0)
-        b["bezahlt"] = b["status"] != "storniert" and summe > 0 and b["bezahlt_cent"] >= summe and not b["preis_offen"]
+        b["bezahlt"] = b["status"] != "storniert" and b["bezahlt_cent"] >= summe and not b["preis_offen"]
+        name = v.execute("SELECT wert FROM einstellungen WHERE schluessel = 'paypal'").fetchone()
+        b["paypal_link"] = (f"https://paypal.me/{name[0]}/{b['offen_cent'] // 100}.{b['offen_cent'] % 100:02d}EUR"
+                            if name and name[0] and b["offen_cent"] > 0 and not b["preis_offen"] else "")
         b["zahlungen"] = [dict(z) for z in v.execute(
             "SELECT * FROM zahlungen WHERE bestellung_id = ? ORDER BY id", (oid,))]
         return b
@@ -943,7 +946,7 @@ class Verkauf:
         return ergebnis
 
     # ---------------- Einstellungen und Zahlungserinnerung ----------------
-    STANDARD = {"erinnerung_tage": "3", "erinnerung_uhrzeit": "18:00", "erinnerung_ziel": "", "erinnerung_zuletzt": ""}
+    STANDARD = {"paypal": "", "erinnerung_tage": "3", "erinnerung_uhrzeit": "18:00", "erinnerung_ziel": "", "erinnerung_zuletzt": ""}
 
     def einstellung(self, schluessel):
         with self.d._verbindung() as v:

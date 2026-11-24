@@ -318,7 +318,7 @@ def erstelle_app(pfad, uhr=None):
   <li><a href="{{ url_for('kunden') }}">{{ symbole.kunden|safe }}Kunden</a></li>
   <li><a href="{{ url_for('scan') }}">{{ symbole.scannen|safe }}Scannen</a></li>
   <li><a href="{{ url_for('auswertung') }}">{{ symbole.auswertung|safe }}Auswertung</a></li>
-  <li><a href="{{ url_for('erinnerung_seite') }}">{{ symbole.glocke|safe }}Zahlungserinnerung</a></li>
+  <li><a href="{{ url_for('erinnerung_seite') }}">{{ symbole.glocke|safe }}Zahlungen &amp; Erinnerung</a></li>
   <li><a href="{{ url_for('preise') }}">{{ symbole.preise|safe }}Kilopreise Fleisch</a></li>
   <li><a href="{{ url_for('sicherung') }}">{{ symbole.sicherung|safe }}Sicherung</a></li>
 </ul></div>
