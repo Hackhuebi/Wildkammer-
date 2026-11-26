@@ -1141,7 +1141,17 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
 <div class="reiter">{% for w, n in [('offen','Offen'),('unbezahlt','Unbezahlt'),('nicht_ausgeliefert','Nicht ausgeliefert'),('abgeschlossen','Abgeschlossen'),('alle','Alle')] %}
 <a class="{{ 'an' if filter == w }}" href="{{ url_for('bestellungen', filter=w) }}">{{ n }}</a>{% endfor %}</div>
 {% set liste = bestellungen %}""" + TABELLE
-        return seite(vorlage, "Bestellungen", anzahl_notizen=len(vk.vormerkungen()), u=vk.umsatz(), bestellungen=vk.bestellungen(f), filter=f,
+        def rang(b):
+            # Oben: nur noch eins offen (geliefert, aber unbezahlt – oder bezahlt, aber nicht geliefert).
+            # Dann: beides offen. Unten: erledigt und storniert. Innerhalb bleibt die bisherige Reihenfolge.
+            if b["status"] == "storniert":
+                return 3
+            geliefert = b["status"] == "ausgeliefert"
+            if geliefert != b["bezahlt"]:
+                return 0
+            return 2 if geliefert else 1
+        liste = sorted(vk.bestellungen(f), key=rang)  # sorted ist stabil
+        return seite(vorlage, "Bestellungen", anzahl_notizen=len(vk.vormerkungen()), u=vk.umsatz(), bestellungen=liste, filter=f,
                      zurueck_zu=url_for("bestellungen", filter=f))
 
     @app.route("/bestellungen/neu", methods=["GET", "POST"])

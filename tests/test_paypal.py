@@ -50,3 +50,18 @@ def test_null_euro_bestellung_erst_nach_tippen_bezahlt(c):
     assert api(c, "bestellungen", kunde="Ben", filter="unbezahlt")["anzahl"] == 0
     d = bestellung(c, "Lena", [{"produkt": "Raps", "menge": 1}])
     assert api(c, "bezahlt", bestellung_id=d)["bestellung"]["vollstaendig_bezahlt"]
+
+
+def test_halb_erledigte_bestellungen_oben(c):
+    zugang(c, "Salami", 6)
+    beides = bestellung(c, "Anna", [{"produkt": "Salami", "menge": 1}])
+    geliefert = bestellung(c, "Ben", [{"produkt": "Salami", "menge": 1}])
+    bezahlt = bestellung(c, "Greta", [{"produkt": "Salami", "menge": 1}])
+    fertig = bestellung(c, "Lena", [{"produkt": "Salami", "menge": 1}])
+    c.post(f"/bestellungen/{geliefert}/ausgeliefert")
+    c.post(f"/bestellungen/{bezahlt}/bezahlt")
+    c.post(f"/bestellungen/{fertig}/ausgeliefert")
+    c.post(f"/bestellungen/{fertig}/bezahlt")
+    html = c.get("/bestellungen?filter=alle").get_data(as_text=True)
+    pos = {n: html.index(f"{n}</") for n in ("Anna", "Ben", "Greta", "Lena")}
+    assert max(pos["Ben"], pos["Greta"]) < pos["Anna"] < pos["Lena"]
