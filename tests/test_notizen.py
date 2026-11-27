@@ -106,3 +106,26 @@ def test_knopf_neue_bestellung_verschiebbar(c):
     assert html.index("Neue Bestellung</a>") < html.index("<h2>Zu liefern</h2>")
     c.post("/heute/anpassen", data={"baustein": "neu", "tun": "umschalten"})
     assert "Neue Bestellung</a>" not in c.get("/").get_data(as_text=True)
+
+
+def test_kunden_historie(c, uhr):
+    from datetime import timedelta
+    zugang(c, "Salami", 10)   # 16 €
+    zugang(c, "Knacker", 5)   # 10 €
+    kid = api(c, "kunde_anlegen", name="Erik Probst")["kunde_id"]
+    a = api(c, "bestellung_anlegen", kunde_id=kid, positionen=[{"produkt": "Salami", "menge": 2}])["angelegt"]["bestellung_id"]
+    c.post(f"/bestellungen/{a}/bezahlt")
+    uhr.t += timedelta(days=400)
+    api(c, "bestellung_anlegen", kunde_id=kid, positionen=[{"produkt": "Salami", "menge": 1}, {"produkt": "Knacker", "menge": 2}])
+    s = api(c, "bestellung_anlegen", kunde_id=kid, positionen=[{"produkt": "Knacker", "menge": 1}])["angelegt"]["bestellung_id"]
+    c.post(f"/bestellungen/{s}/storno")   # zählt nicht
+    vk = c.application.config["VERKAUF"]
+    h = vk.kunden_historie(kid)
+    assert h["anzahl"] == 2 and h["umsatz_cent"] == 3200 + 3600 and h["offen_cent"] == 3600
+    assert h["produkte"][0][0] == "Salami" and h["produkte"][0][1]["menge"] == 3
+    assert dict(h["produkte"])["Knacker"]["menge"] == 2 and len(h["jahre"]) == 2
+    html = c.get(f"/kunden/{kid}").get_data(as_text=True)
+    assert "Überblick</h2>" in html and "68,00 €" in html and "Gekauft insgesamt" in html
+    assert "Nach Jahr" in html and "<h2>Alle Bestellungen</h2>" in html
+    neu = api(c, "kunde_anlegen", name="Ohne Bestellung")["kunde_id"]
+    assert "Überblick" not in c.get(f"/kunden/{neu}").get_data(as_text=True)

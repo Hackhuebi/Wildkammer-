@@ -1267,6 +1267,36 @@ class Verkauf:
             "preis_offen": preis_offen,
         }
 
+    def kunden_historie(self, kid):
+        """Was hat der Kunde wann gekauft: Kennzahlen, Produkte gesamt und Summen je Jahr (ohne Stornos)."""
+        with self.d._verbindung() as v:
+            liste = [b for b in self._bestellungen(v, filter="alle", kunde_id=kid) if b["status"] != "storniert"]
+        produkte, jahre = {}, {}
+        for b in liste:
+            j = jahre.setdefault(b["datum"][:4], {"anzahl": 0, "umsatz_cent": 0})
+            j["anzahl"] += 1
+            j["umsatz_cent"] += b["summe_cent"]
+            for z in b["wurst"]:
+                r = produkte.setdefault(z["produktname"], {"menge": 0, "cent": 0, "einheit": z["einheit"]})
+                r["menge"] += z["menge"]
+                r["cent"] += z["menge"] * z["einzelpreis_cent"]
+            for f in b["fleisch"]:
+                r = produkte.setdefault(f"{f['art']} {f['teil']}", {"menge": 0, "cent": 0, "einheit": "Tüte"})
+                r["menge"] += 1
+                r["cent"] += f["preis_cent"] or 0
+        daten = sorted(b["datum"] for b in liste)
+        return {
+            "anzahl": len(liste),
+            "umsatz_cent": sum(b["summe_cent"] for b in liste),
+            "bezahlt_cent": sum(min(b["bezahlt_cent"], b["summe_cent"]) for b in liste),
+            "offen_cent": sum(b["offen_cent"] for b in liste),
+            "rabatt_cent": sum(b["rabatt_cent"] for b in liste),
+            "erste": daten[0] if daten else "",
+            "letzte": daten[-1] if daten else "",
+            "produkte": sorted(produkte.items(), key=lambda x: (-x[1]["menge"], x[0])),
+            "jahre": sorted(jahre.items(), reverse=True),
+        }
+
     def umsatz(self):
         with self.d._verbindung() as v:
             alle = self._bestellungen(v, filter="alle")

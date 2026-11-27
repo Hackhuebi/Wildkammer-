@@ -1053,6 +1053,26 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
                 "Gespeichert.")[1])
         vorlage = """
 <a class="zurueck" href="{{ url_for('kunden') }}">{{ pfeil|safe }} Zurück zu den Kunden</a>
+{% if h.anzahl %}<h2 style="margin-top:8px">Überblick</h2>
+<div class="karte zahlen">
+  <div class="zahl"><b>{{ h.anzahl }}</b><span class="leise">Bestellungen{% if h.erste %} seit {{ de(h.erste) }}{% endif %}</span></div>
+  <div class="zahl"><b>{{ euro(h.umsatz_cent) }}</b><span class="leise">Umsatz gesamt</span></div>
+  <div class="zahl"><b>{{ euro(h.offen_cent) }}</b><span class="leise">noch offen</span></div>
+  <div class="zahl"><b>{{ de(h.letzte) }}</b><span class="leise">letzte Bestellung</span></div>
+</div>
+{% if h.rabatt_cent %}<p class="leise" style="margin:8px 4px">Rabatte insgesamt {{ euro(h.rabatt_cent) }}.</p>{% endif %}
+<h2>Gekauft insgesamt</h2>
+<div class="karte rollbar"><table class="knapp">
+<tr><th>Produkt</th><th class="zahl">Menge</th><th class="zahl">Wert</th></tr>
+{% for name, r in h.produkte %}<tr><td class="umbruch">{{ name }}</td><td class="zahl">{{ r.menge }}</td>
+  <td class="zahl">{{ euro(r.cent) }}</td></tr>{% endfor %}
+</table></div>
+{% if h.jahre|length > 1 %}<h2>Nach Jahr</h2>
+<div class="karte rollbar"><table class="knapp">
+<tr><th>Jahr</th><th class="zahl">Bestellungen</th><th class="zahl">Umsatz</th></tr>
+{% for jahr, w in h.jahre %}<tr><td>{{ jahr }}</td><td class="zahl">{{ w.anzahl }}</td><td class="zahl">{{ euro(w.umsatz_cent) }}</td></tr>{% endfor %}
+</table></div>{% endif %}{% endif %}
+<h2>Kontakt</h2>
 <form class="karte form-zeile" method="post">
   <label>Name<input name="name" value="{{ k.name }}" required></label>
   <label>Telefon<input name="telefon" type="tel" value="{{ k.telefon }}"></label>
@@ -1063,7 +1083,7 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
 </form>
 <p><a class="knopf" href="{{ url_for('bestellung_neu', kunde=k.id) }}">Neue Bestellung für {{ k.name }}</a></p>
 {% if notizen %}<h2>Notizen</h2>""" + NOTIZEN + """{% endif %}
-<h2>Bestellungen</h2>
+<h2>Alle Bestellungen</h2>
 {% set liste = bestellungen %}{% include_tabelle %}
 {% if andere or not bestellungen %}<details class="karte"><summary><b>Doppelt angelegt oder Tippfehler?</b></summary>
 {% if andere %}<form class="form-zeile" method="post" action="{{ url_for('kunde_zusammenfuehren', kid=k.id) }}"
@@ -1079,7 +1099,8 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
         return seite(vorlage.replace("{% include_tabelle %}", TABELLE), k["name"], k=k,
                      bestellungen=vk.bestellungen("alle", kid), zurueck_zu=url_for("kunde", kid=kid),
                      andere=[a for a in vk.kunden() if a["id"] != kid],
-                     notizen=vk.vormerkungen(kunde_id=kid), notiz_zurueck=f"kunde:{kid}")
+                     notizen=vk.vormerkungen(kunde_id=kid), notiz_zurueck=f"kunde:{kid}",
+                     h=vk.kunden_historie(kid))
 
     @app.post("/kunden/<int:kid>/zusammenfuehren")
     def kunde_zusammenfuehren(kid):

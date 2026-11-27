@@ -325,13 +325,12 @@ def erstelle_app(pfad, uhr=None):
 {% if app_pfad %}<h2>Als Symbol aufs iPhone</h2>
 <div class="karte">
   <p style="margin-top:0">Diese Adresse öffnet die Wildkammer direkt in der Home-Assistant-App:</p>
-  {% for nr, pfad in [(1, app_pfad), (2, '/hassio/ingress' ~ app_pfad)] %}
-  {% if nr == 2 %}<p class="leise" style="margin:14px 0 6px">Falls 1 nur die Startseite öffnet, diese probieren:</p>{% endif %}
+  {% for nr, pfad in [(1, app_pfad)] %}
   <input id="app-link-{{ nr }}" readonly value="homeassistant://navigate{{ pfad }}?server=default" style="width:100%;font-size:.85rem">
   <p style="margin:8px 0 0"><button type="button" class="neben" onclick="var t=document.getElementById('app-link-{{ nr }}');t.select();t.setSelectionRange(0,999);
-    var ok=function(){this.textContent='✓ Adresse {{ nr }} kopiert'}.bind(this);
+    var ok=function(){this.textContent='✓ Adresse kopiert'}.bind(this);
     if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t.value).then(ok,function(){document.execCommand('copy');ok()})}
-    else{document.execCommand('copy');ok()}">Adresse {{ nr }} kopieren</button></p>{% endfor %}
+    else{document.execCommand('copy');ok()}">Adresse kopieren</button></p>{% endfor %}
   <p class="leise" style="margin-bottom:0">In der App „Kurzbefehle“: neuer Kurzbefehl → „URL öffnen“ → Adresse einfügen →
   oben auf den Namen tippen → „Zum Home-Bildschirm“.</p>
 </div>{% endif %}
