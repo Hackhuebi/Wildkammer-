@@ -40,7 +40,8 @@ def _app_url():
     if not _ziel_url:
         try:
             info = _anfrage("http://supervisor/addons/self/info")
-            _ziel_url = f"/hassio/ingress/{info['data']['slug']}"
+            # Add-on-Panels liegen im Frontend direkt unter /<slug> (so wie in der Seitenleiste)
+            _ziel_url = f"/{info['data']['slug']}"
         except Exception:
             return ""  # später noch einmal versuchen
     return _ziel_url
