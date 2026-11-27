@@ -322,9 +322,25 @@ def erstelle_app(pfad, uhr=None):
   <li><a href="{{ url_for('preise') }}">{{ symbole.preise|safe }}Kilopreise Fleisch</a></li>
   <li><a href="{{ url_for('sicherung') }}">{{ symbole.sicherung|safe }}Sicherung</a></li>
 </ul></div>
+{% if app_pfad %}<h2>Als Symbol aufs iPhone</h2>
+<div class="karte">
+  <p style="margin-top:0">Diese Adresse öffnet die Wildkammer direkt in der Home-Assistant-App:</p>
+  <input id="app-link" readonly value="homeassistant://navigate{{ app_pfad }}" style="width:100%;font-size:.85rem">
+  <p><button type="button" class="neben" onclick="var t=document.getElementById('app-link');t.select();t.setSelectionRange(0,999);
+    var ok=function(){this.textContent='✓ Kopiert'}.bind(this);
+    if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t.value).then(ok,function(){document.execCommand('copy');ok()})}
+    else{document.execCommand('copy');ok()}">Adresse kopieren</button></p>
+  <p class="leise" style="margin-bottom:0">In der App „Kurzbefehle“: neuer Kurzbefehl → „URL öffnen“ → Adresse einfügen →
+  oben auf den Namen tippen → „Zum Home-Bildschirm“.</p>
+</div>{% endif %}
 <p class="leise" style="text-align:center;margin-top:24px">Wildkammer {{ version }}</p>
 """ + ENDE
-        return render_template_string(vorlage, titel="Mehr", version=VERSION, **kontext)
+        try:
+            import erinnerung
+            app_pfad = erinnerung._app_url()
+        except Exception:
+            app_pfad = ""
+        return render_template_string(vorlage, titel="Mehr", version=VERSION, app_pfad=app_pfad, **kontext)
     innen = app.wsgi_app
 
     def mit_ingress_pfad(umgebung, antwort):

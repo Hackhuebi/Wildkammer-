@@ -37,12 +37,12 @@ _ziel_url = None
 def _app_url():
     """Pfad, der beim Antippen der Nachricht die Wildkammer in der App öffnet."""
     global _ziel_url
-    if _ziel_url is None:
+    if not _ziel_url:
         try:
             info = _anfrage("http://supervisor/addons/self/info")
             _ziel_url = f"/hassio/ingress/{info['data']['slug']}"
         except Exception:
-            _ziel_url = ""
+            return ""  # später noch einmal versuchen
     return _ziel_url
 
 

@@ -65,3 +65,12 @@ def test_halb_erledigte_bestellungen_oben(c):
     html = c.get("/bestellungen?filter=alle").get_data(as_text=True)
     pos = {n: html.index(f"{n}</") for n in ("Anna", "Ben", "Greta", "Lena")}
     assert max(pos["Ben"], pos["Greta"]) < pos["Anna"] < pos["Lena"]
+
+
+def test_app_adresse_auf_mehr(c, monkeypatch):
+    import erinnerung
+    monkeypatch.setattr(erinnerung, "_ziel_url", "/hassio/ingress/abc123_wildkammer")
+    html = c.get("/mehr").get_data(as_text=True)
+    assert 'value="homeassistant://navigate/hassio/ingress/abc123_wildkammer"' in html
+    monkeypatch.setattr(erinnerung, "_ziel_url", None)
+    assert "Als Symbol aufs iPhone" not in c.get("/mehr").get_data(as_text=True)
