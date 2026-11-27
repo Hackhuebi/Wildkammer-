@@ -14,13 +14,3 @@ sichert die alten Fassungen in `/config/wildkammer-sicherung`, lässt Home Assis
 prüfen und lädt neu. Bei einem Fehler bleibt die alte Fassung aktiv.
 
 Einrichtung, Sprachbefehle und Claude-Anbindung: siehe `ANLEITUNG-VERKAUF.md` und `ANLEITUNG-SPRACHE.md`.
-
-## Beschattung (zweites Add-on)
-
-Raffstores, Rollläden und Galeriefenster in derselben Optik wie die Wildkammer, fürs iPhone gebaut:
-Übersicht mit Zählern und „Alle auf / Alle zu / Lamellen“, darunter je Raum ein Reiter mit Reglern für Höhe und Lamellen.
-
-Installieren: im Add-on-Store (gleiches Repository) **Beschattung** installieren, starten, „In Seitenleiste anzeigen“ einschalten.
-
-Räume und Rollos stehen in `beschattung/app/raeume.py`. Eigene Aufteilung ohne Update: `/config/beschattung.yaml`
-anlegen (Aufbau siehe `BEISPIEL` in derselben Datei) und das Add-on neu starten.
