@@ -24,17 +24,19 @@ VERSION = _version()
 
 STIL = """
 :root { color-scheme: light dark;
-  --grund:#f2f1ec; --flaeche:#ffffff; --flaeche2:#f7f6f2; --text:#1d1e1a; --leise:#6b6d64; --linie:#e3e1d9;
-  --akzent:#2c6a4e; --akzent-hell:#e3efe8; --akzent-text:#fff; --warn:#b03a2b; --warn-hell:#fbe9e6; --warn-text:#fff;
-  --schatten:0 1px 2px rgba(30,30,20,.06), 0 4px 14px rgba(30,30,20,.05); --rund:14px; --leiste:64px; }
+  --grund:#fafafa; --flaeche:#ffffff; --flaeche2:#f5f5f5; --text:#212121; --leise:#727272; --linie:#e0e0e0;
+  --akzent:#03a9f4; --akzent-hell:#e1f5fe; --akzent-text:#fff; --warn:#db4437; --warn-hell:#fdecea; --warn-text:#fff;
+  --gut:#43a047; --hinweis:#ffa600;
+  --schatten:0 1px 2px rgba(30,30,20,.06), 0 4px 14px rgba(30,30,20,.05); --rund:12px; --leiste:64px; }
 @media (prefers-color-scheme: dark) { :root {
-  --grund:#121310; --flaeche:#1d1f1b; --flaeche2:#252722; --text:#eceae3; --leise:#a2a49a; --linie:#33352f;
-  --akzent:#72c29a; --akzent-hell:#1d3328; --akzent-text:#0d1a14; --warn:#f08e7c; --warn-hell:#3a1f1a; --warn-text:#2a0f0a;
+  --grund:#111111; --flaeche:#1c1c1c; --flaeche2:#262626; --text:#e1e1e1; --leise:#9b9b9b; --linie:#2f2f2f;
+  --akzent:#03a9f4; --akzent-hell:#0b2a3a; --akzent-text:#fff; --warn:#ef5350; --warn-hell:#3a1d1c; --warn-text:#fff;
+  --gut:#66bb6a; --hinweis:#ffa600;
   --schatten:none; } }
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html { -webkit-text-size-adjust:100%; }
 body { margin:0; background:var(--grund); color:var(--text);
-  font:16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif; }
+  font:16px/1.45 Roboto, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; }
 main { max-width:760px; margin:0 auto; padding:8px 16px calc(var(--leiste) + 28px + env(safe-area-inset-bottom)); }
 header.kopf { position:sticky; top:0; z-index:5; margin:0 -16px 8px; padding:14px 16px 10px;
   background:color-mix(in srgb, var(--grund) 88%, transparent); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
@@ -142,8 +144,8 @@ BEREICH = {"": "heute", "heute": "heute", "fleisch": "fleisch", "s": "fleisch", 
 
 RAHMEN = """<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f2f1ec" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121310" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="format-detection" content="telephone=no">
 <title>{{ titel }}</title>
 <style>{{ stil|safe }}</style></head><body><main>

@@ -52,12 +52,12 @@ STIL_EXTRA = """
 .form-zeile label { flex:1; min-width:120px; }
 .inline { display:inline; margin:0; }
 button.klein { padding:6px 12px; min-height:36px; font-size:.9rem; }
-.ok { color:var(--akzent); font-weight:700; }
+.ok { color:var(--gut); font-weight:700; }
 .reiter { display:flex; gap:8px; overflow-x:auto; margin:0 -16px 12px; padding:2px 16px; scrollbar-width:none; }
 .reiter::-webkit-scrollbar { display:none; }
 .reiter a { flex:none; padding:8px 14px; border-radius:20px; text-decoration:none; font-weight:600; font-size:.92rem;
   background:var(--flaeche); color:var(--text); border:1px solid var(--linie); }
-.reiter a.an { background:var(--text); color:var(--grund); border-color:var(--text); }
+.reiter a.an { background:var(--akzent); color:var(--akzent-text); border-color:var(--akzent); }
 .posten { margin:0; padding-left:18px; }
 td.zahl, th.zahl { text-align:right; }
 td.umbruch { white-space:normal; min-width:110px; }
@@ -69,8 +69,6 @@ table.knapp th, table.knapp td { padding:7px 6px; }
 label.haken { flex-direction:row; gap:10px; align-items:center; font-size:1rem; color:inherit; margin:6px 0; }
 label.haken input { width:22px; height:22px; margin:0; flex:none; }
 details.karte summary { cursor:pointer; }
-:root { --warn-text:#fff; }
-@media (prefers-color-scheme: dark) { :root { --warn-text:#2a0f0a; } }
 .stepper { display:inline-flex; align-items:center; gap:6px; }
 .stepper input { width:52px; height:44px; padding:0; text-align:center; font-size:1.1rem; font-weight:700;
   -moz-appearance:textfield; appearance:textfield; }
@@ -78,7 +76,7 @@ details.karte summary { cursor:pointer; }
 button.st { width:44px; height:44px; padding:0; border-radius:10px; font-size:1.5rem; font-weight:700; line-height:1;
   display:inline-flex; align-items:center; justify-content:center; touch-action:manipulation; }
 button.st.minus { background:var(--warn); border-color:var(--warn); color:var(--warn-text); }
-button.st.plus { background:var(--akzent); border-color:var(--akzent); color:var(--akzent-text); }
+button.st.plus { background:var(--gut); border-color:var(--gut); color:#fff; }
 button.st:disabled { opacity:.25; }
 .feld { display:flex; flex-direction:column; gap:3px; font-size:.85rem; color:var(--leise); }
 .modus { display:flex; gap:0; margin:0 0 12px; border:1px solid var(--linie); border-radius:12px; overflow:hidden; }
@@ -88,7 +86,7 @@ button.st:disabled { opacity:.25; }
 .modus label:has(input:checked).rot { background:var(--warn); color:var(--warn-text); }
 .modus label:has(input:checked).gruen { background:var(--akzent); color:var(--akzent-text); }
 tr.gruppe th { padding-top:18px; font-size:.8rem; color:var(--text); }
-.karte.notiz { border-left:4px solid #d4a017; }
+.karte.notiz { border-left:4px solid var(--hinweis); }
 span.posten { display:block; font-size:.86rem; line-height:1.35; margin:2px 0; white-space:normal; }
 tr.summe td { border-top:2px solid var(--linie); }
 tr.weniger td { background:color-mix(in srgb, var(--warn) 10%, transparent); }
