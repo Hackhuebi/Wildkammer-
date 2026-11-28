@@ -25,12 +25,12 @@ VERSION = _version()
 STIL = """
 :root { color-scheme: light dark;
   --grund:#f7f7f5; --flaeche:#ffffff; --flaeche2:#f4f4f2; --text:#212121; --leise:#737373; --linie:#e4e4e0;
-  --akzent:#2f6b4f; --akzent-hell:#eef4f0; --akzent-text:#fff; --warn:#db4437; --warn-hell:#fdecea; --warn-text:#fff;
+  --akzent:#2f6b4f; --akzent-hell:#eef4f0; --akzent-text:#fff; --knopf:#2f6b4f; --knopf-text:#fff; --warn:#db4437; --warn-hell:#fdecea; --warn-text:#fff;
   --gut:#43a047; --hinweis:#ffa600;
   --schatten:0 1px 2px rgba(30,30,20,.06), 0 4px 14px rgba(30,30,20,.05); --rund:12px; --leiste:64px; }
 @media (prefers-color-scheme: dark) { :root {
-  --grund:#111111; --flaeche:#1c1c1c; --flaeche2:#262626; --text:#e1e1e1; --leise:#9b9b9b; --linie:#2f2f2f;
-  --akzent:#7cc4a0; --akzent-hell:#1c2b23; --akzent-text:#0e1a14; --warn:#ef5350; --warn-hell:#3a1d1c; --warn-text:#fff;
+  --grund:#111312; --flaeche:#1b1d1c; --flaeche2:#252826; --text:#e6e6e3; --leise:#a0a39f; --linie:#2e322f;
+  --akzent:#8fc9a8; --akzent-hell:#1f2e26; --akzent-text:#0e1a14; --knopf:#3a7d5c; --knopf-text:#fff; --warn:#ef5350; --warn-hell:#3a1d1c; --warn-text:#fff;
   --gut:#66bb6a; --hinweis:#ffa600;
   --schatten:none; } }
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -62,7 +62,7 @@ select,input,textarea { font:16px/1.3 inherit; font-family:inherit; font-weight:
   border:1px solid var(--linie); border-radius:10px; background:var(--flaeche2); color:var(--text); min-width:0; }
 select:focus,input:focus,textarea:focus { outline:2px solid var(--akzent); outline-offset:0; border-color:transparent; }
 button, a.knopf { font:inherit; font-weight:650; min-height:44px; padding:10px 16px; border-radius:12px; cursor:pointer;
-  border:1px solid var(--akzent); background:var(--akzent); color:var(--akzent-text); touch-action:manipulation;
+  border:1px solid var(--knopf); background:var(--knopf); color:var(--knopf-text); touch-action:manipulation;
   transition:transform .08s ease, opacity .08s ease; }
 button:active, a.knopf:active { transform:scale(.97); opacity:.85; }
 button:disabled { opacity:.4; }
@@ -145,7 +145,7 @@ BEREICH = {"": "heute", "heute": "heute", "fleisch": "fleisch", "s": "fleisch", 
 RAHMEN = """<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#111312" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="format-detection" content="telephone=no">
 <title>{{ titel }}</title>
 <style>{{ stil|safe }}</style></head><body><main>

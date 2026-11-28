@@ -57,7 +57,7 @@ button.klein { padding:6px 12px; min-height:36px; font-size:.9rem; }
 .reiter::-webkit-scrollbar { display:none; }
 .reiter a { flex:none; padding:8px 14px; border-radius:20px; text-decoration:none; font-weight:600; font-size:.92rem;
   background:var(--flaeche); color:var(--text); border:1px solid var(--linie); }
-.reiter a.an { background:var(--akzent); color:var(--akzent-text); border-color:var(--akzent); }
+.reiter a.an { background:var(--knopf); color:var(--knopf-text); border-color:var(--knopf); }
 .posten { margin:0; padding-left:18px; }
 td.zahl, th.zahl { text-align:right; }
 td.umbruch { white-space:normal; min-width:110px; }
@@ -84,7 +84,7 @@ button.st:disabled { opacity:.25; }
   font-size:1rem; font-weight:700; color:var(--text, inherit); cursor:pointer; }
 .modus input { position:absolute; opacity:0; width:1px; height:1px; }
 .modus label:has(input:checked).rot { background:var(--warn); color:var(--warn-text); }
-.modus label:has(input:checked).gruen { background:var(--akzent); color:var(--akzent-text); }
+.modus label:has(input:checked).gruen { background:var(--knopf); color:var(--knopf-text); }
 tr.gruppe th { padding-top:18px; font-size:.8rem; color:var(--text); }
 .karte.notiz { border-left:4px solid var(--hinweis); }
 span.posten { display:block; font-size:.86rem; line-height:1.35; margin:2px 0; white-space:normal; }
