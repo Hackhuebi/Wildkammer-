@@ -1075,7 +1075,7 @@ Ein Preis für „Schwarzwild“ gilt für Bache, Keiler und Frischling gleicher
         preisliste = vk.fleischpreise()
         wahl = d.auswahl()
         # Preise gelten je Wildart, nicht je Bock/Bache/Frischling: nur die Grundart zur Auswahl.
-        arten = ["Reh", "Rotwild", "Damwild", "Schwarzwild"]
+        arten = ["Schwarzwild", "Reh", "Rotwild", "Damwild"]
         for a in wahl["arten"] + [p["art"] for p in preisliste]:
             x = a.split(" ")[0]
             if x.lower() not in [y.lower() for y in arten]:
@@ -1088,6 +1088,8 @@ Ein Preis für „Schwarzwild“ gilt für Bache, Keiler und Frischling gleicher
         vorhanden = next((p for p in preisliste if p["art"].lower() == wahl_art.lower()
                           and p["teil"].lower() == wahl_teil.lower()), None)
         wahl_preis = f"{vorhanden['preis_kg_cent'] / 100:.2f}".replace(".", ",") if vorhanden else ""
+        rang = {a.lower(): i for i, a in enumerate(arten)}
+        preisliste.sort(key=lambda p: (rang.get(p["art"].split(" ")[0].lower(), 99), " " in p["art"], p["art"].lower(), p["teil"].lower()))
         return seite(vorlage, "Kilopreise", preise=preisliste, arten=arten, teile=teilliste,
                      wahl_art=next((a for a in arten if a.lower() == wahl_art.lower()), ""),
                      wahl_teil=next((x for x in teilliste if x.lower() == wahl_teil.lower()), ""), wahl_preis=wahl_preis)

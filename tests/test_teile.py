@@ -135,3 +135,16 @@ def test_kilopreise_nur_grundarten(c):
     assert "<td>Schwarzwild Bache</td>" in html.replace('">Schwarzwild Bache</a>', ">Schwarzwild Bache</td>").replace("<td><a href", "<td><a href") or "Schwarzwild Bache" in html
     html = c.get("/preise").get_data(as_text=True)
     assert ">Schwarzwild</option>" in html and "Frili</option>" not in html and "Muffelwild" not in html
+
+
+def test_kilopreise_reihenfolge(c):
+    vk = c.application.config["VERKAUF"]
+    for art in ("Damwild", "Reh", "Schwarzwild", "Rotwild"):
+        vk.fleischpreis_setzen(art, "Keule", "10")
+    html = c.get("/preise").get_data(as_text=True)
+    auswahl = html.split('name="art"')[1].split("</select>")[0]
+    assert [auswahl.index(a) for a in (">Schwarzwild<", ">Reh<", ">Rotwild<", ">Damwild<")] == sorted(
+        auswahl.index(a) for a in (">Schwarzwild<", ">Reh<", ">Rotwild<", ">Damwild<"))
+    tabelle = html.split("<table>")[1]
+    pos = [tabelle.index(f">{a}</a>") for a in ("Schwarzwild", "Reh", "Rotwild", "Damwild")]
+    assert pos == sorted(pos)
