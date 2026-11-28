@@ -240,6 +240,8 @@ class Verkauf:
                           "datum || 'T12:00:00') WHERE status = 'ausgeliefert'")
             if "quittiert" not in [z[1] for z in v.execute("PRAGMA table_info(bestellungen)")]:
                 v.execute("ALTER TABLE bestellungen ADD COLUMN quittiert INTEGER NOT NULL DEFAULT 0")
+            if "zaehlbar" not in [z[1] for z in v.execute("PRAGMA table_info(teilstuecke)")]:
+                v.execute("ALTER TABLE teilstuecke ADD COLUMN zaehlbar INTEGER NOT NULL DEFAULT 0")
             # Honig kam später dazu: gleiche Tabelle, Produkte haben eine Kategorie.
             if "kategorie" not in [z[1] for z in v.execute("PRAGMA table_info(wurstprodukte)")]:
                 v.execute("ALTER TABLE wurstprodukte ADD COLUMN kategorie TEXT NOT NULL DEFAULT 'wurst'")
@@ -970,7 +972,11 @@ class Verkauf:
         with self.d._verbindung() as v:
             return [dict(z) for z in v.execute("SELECT * FROM teilstuecke ORDER BY name")]
 
-    def teilstueck_anlegen(self, name, varianten=""):
+    def teilstueck_zaehlbar(self, tid, an):
+        with self.d._verbindung() as v:
+            v.execute("UPDATE teilstuecke SET zaehlbar = ? WHERE id = ?", (1 if an else 0, tid))
+
+    def teilstueck_anlegen(self, name, varianten="", zaehlbar=False):
         import teile
         name = teile.name_pruefen(name)
         if not name:
@@ -981,7 +987,8 @@ class Verkauf:
         with self.d._verbindung() as v:
             if v.execute("SELECT 1 FROM teilstuecke WHERE name = ?", (name,)).fetchone():
                 raise Fehler("teil_gibt_es")
-            v.execute("INSERT INTO teilstuecke(name, varianten, erstellt) VALUES(?, ?, ?)", (name, varianten, self._jetzt()))
+            v.execute("INSERT INTO teilstuecke(name, varianten, erstellt, zaehlbar) VALUES(?, ?, ?, ?)",
+                      (name, varianten, self._jetzt(), 1 if zaehlbar else 0))
         return name
 
     def teilstueck_loeschen(self, tid):
@@ -990,7 +997,7 @@ class Verkauf:
 
     def teile_paket(self):
         import teile
-        return teile.paket([(t["name"], t["varianten"]) for t in self.teilstuecke()])
+        return teile.paket([(t["name"], t["varianten"], t["zaehlbar"]) for t in self.teilstuecke()])
 
     # ---------------- Einstellungen und Zahlungserinnerung ----------------
     STANDARD = {"paypal": "", "erinnerung_tage": "3", "erinnerung_uhrzeit": "18:00", "erinnerung_ziel": "", "erinnerung_zuletzt": ""}

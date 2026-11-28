@@ -20,7 +20,7 @@ wildetikett:
       url: http://192.168.178.60:8099/api/anlegen
       method: POST
       content_type: application/json
-      payload: '{"teil": "{{ teil }}", "gewicht_g": {{ gewicht_g | default(0) | int(0) }}}'
+      payload: '{"teil": "{{ teil }}", "gewicht_g": {{ gewicht_g | default(0) | int(0) }}, "stueckzahl": {{ stueckzahl | default(0) | int(0) }}}'
     wild_gedruckt:
       url: "http://192.168.178.60:8099/api/gedruckt/{{ nummer | int }}"
       method: POST
@@ -65,11 +65,11 @@ wildetikett:
                 "y": 8
                 size: 32
               - type: text
-                value: "{{ e.teil }}"
+                value: "{{ e.teil_etikett | default(e.teil) }}"
                 x: 8
                 "y": 70
                 # Lange Wörter kleiner, damit sie nicht in den QR-Code laufen.
-                size: "{{ 46 if e.teil | length <= 8 else 34 }}"
+                size: "{% set t = e.teil_etikett | default(e.teil) %}{{ 46 if t | length <= 8 else 34 if t | length <= 12 else 26 }}"
               # Bleibt leer, wenn kein Gewicht genannt wurde.
               - type: text
                 value: "{{ e.gewicht_text }}"
@@ -175,6 +175,7 @@ wildetikett:
         gewicht_g: { description: "Gramm, optional" }
         anzahl: { description: "Anzahl gleicher Tüten" }
         wildart: { description: "Wildart, optional, z. B. Reh, Reh Bock oder Schwarzwild Frili. Setzt die aktive Wildart vor dem Druck." }
+        stueckzahl: { description: "Stück in der Tüte, optional, z. B. 4 für 4x Schnitzel" }
       sequence:
         - if: "{{ wildart | default('') | trim != '' }}"
           then:
@@ -188,6 +189,7 @@ wildetikett:
                 data:
                   teil: "{{ teil }}"
                   gewicht_g: "{{ gewicht_g | default(0) | int(0) }}"
+                  stueckzahl: "{{ stueckzahl | default(0) | int(0) }}"
                 response_variable: antwort
               - if: "{{ not antwort.content.ok }}"
                 then:

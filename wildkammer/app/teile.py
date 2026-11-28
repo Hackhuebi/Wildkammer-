@@ -33,13 +33,14 @@ def woerter(name, varianten=""):
     return sauber
 
 
-def _ausloeser(name, formen):
+def _ausloeser(name, formen, zaehlbar=False):
+    """zaehlbar: „4 mal Schnitzel“ heißt dann ein Etikett „4x Schnitzel“ statt vier Etiketten."""
     w = "(" + "|".join(formen) + ")" if len(formen) > 1 else formen[0]
     return [
         {"trigger": "conversation", "id": name, "command": [
             f"[etikett] {w}", f"[etikett] {w} {{gewicht}}",
             f"(drucke|druck) [ein] [etikett] [für] {w}", f"(drucke|druck) [ein] [etikett] [für] {w} {{gewicht}}"]},
-        {"trigger": "conversation", "id": f"{name}#menge", "command": [f"{MENGE} {w}", f"{MENGE} {w} {{gewicht}}"]},
+        {"trigger": "conversation", "id": f"{name}#{'stueck' if zaehlbar else 'menge'}", "command": [f"{MENGE} {w}", f"{MENGE} {w} {{gewicht}}"]},
         {"trigger": "conversation", "id": f"{name}#drucke", "command": [
             f"(drucke|druck) {ANZAHL} (etikett|etiketten) [für] {w}",
             f"(drucke|druck) {ANZAHL} (etikett|etiketten) [für] {w} {{gewicht}}"]},
@@ -50,7 +51,7 @@ AKTIONEN = [
     {"action": "rest_command.wild_eingabe",
      "data": {"gewicht": "{{ trigger.slots.gewicht | default('') }}",
               "menge": "{% set w = trigger.sentence.split(' ') %}"
-                       "{{ w[1] if '#drucke' in trigger.id else w[0] if '#menge' in trigger.id else '' }}"},
+                       "{{ w[1] if '#drucke' in trigger.id else w[0] if ('#menge' in trigger.id or '#stueck' in trigger.id) else '' }}"},
      "response_variable": "eingabe"},
     {"if": "{{ not eingabe.content.ok }}", "then": [
         {"set_conversation_response": "{% if eingabe.content.fehler == 'gewicht_ungueltig' %}Das Gewicht habe ich "
@@ -60,10 +61,12 @@ AKTIONEN = [
         {"stop": "Eingabe nicht verstanden"}]},
     {"action": "script.wild_sprache_etikett",
      "data": {"teil": "{{ trigger.id.split('#')[0] }}", "gewicht_g": "{{ eingabe.content.gewicht_g }}",
-              "anzahl": "{{ eingabe.content.anzahl }}"},
+              "anzahl": "{{ 1 if '#stueck' in trigger.id else eingabe.content.anzahl }}",
+              "stueckzahl": "{{ eingabe.content.anzahl if '#stueck' in trigger.id else 0 }}"},
      "response_variable": "r"},
     {"set_conversation_response":
-        "{% if r.ok %}{% if eingabe.content.anzahl > 1 %}{{ eingabe.content.anzahl }} mal {% endif %}"
+        "{% if r.ok %}{% if '#stueck' in trigger.id %}{{ eingabe.content.anzahl }} Stück "
+        "{% elif eingabe.content.anzahl > 1 %}{{ eingabe.content.anzahl }} mal {% endif %}"
         "{{ trigger.id.split('#')[0] }}{% set g = eingabe.content.gewicht_g %}"
         "{% if g and g < 1000 %}, {{ g }} Gramm{% elif g %}, {{ (g / 1000) | string | replace('.', ',') }} Kilo{% endif %}"
         ", {{ r.art }}.{% if r.druck_unsicher %} Der Drucker hat einen Fehler gemeldet, eingebucht ist es trotzdem. "
@@ -75,14 +78,14 @@ AKTIONEN = [
 
 
 def paket(eigene):
-    """eigene: [(name, varianten)] -> Inhalt von wildkammer_teile.yaml (JSON ist gültiges YAML)."""
+    """eigene: [(name, varianten[, zaehlbar])] -> Inhalt von wildkammer_teile.yaml (JSON ist gültiges YAML)."""
     kopf = ("# Wird von der Wildkammer erzeugt (Mehr → Teilstücke) und bei jeder Änderung überschrieben.\n"
             "# Eigene Änderungen bitte nicht hier machen.\n")
     ausloeser = []
-    for name, varianten in eigene:
+    for name, varianten, *rest in eigene:
         formen = woerter(name, varianten)
         if formen:
-            ausloeser += _ausloeser(name, formen)
+            ausloeser += _ausloeser(name, formen, bool(rest and rest[0]))
     if not ausloeser:
         return kopf + "wildkammer_teile:\n  automation: []\n"
     automation = [{"id": "wild_sprache_eigene_teile", "alias": "Wild-Sprache: Etikett (eigene Teilstücke)",

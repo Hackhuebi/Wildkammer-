@@ -567,11 +567,14 @@ Alles wird zusammen gebucht oder gar nichts.</p>
     def teilstuecke():
         if request.method == "POST":
             f = request.form
+            if f.get("zaehlbar_id"):
+                vk.teilstueck_zaehlbar(int(f["zaehlbar_id"]), f.get("an") == "1")
+                return redirect(url_for("teilstuecke", m="Gespeichert." + _teile_einspielen()), 303)
             if f.get("loeschen"):
                 vk.teilstueck_loeschen(int(f["loeschen"]))
                 return redirect(url_for("teilstuecke", m="Gelöscht." + _teile_einspielen()), 303)
             try:
-                name = vk.teilstueck_anlegen(f.get("name"), f.get("varianten"))
+                name = vk.teilstueck_anlegen(f.get("name"), f.get("varianten"), f.get("zaehlbar") == "1")
             except Fehler as e:
                 return redirect(url_for("teilstuecke", m=FEHLERTEXT.get(e.kennwort, e.kennwort) + ".", f=1), 303)
             return redirect(url_for("teilstuecke", m=f"„{name}“ angelegt." + _teile_einspielen()), 303)
@@ -581,13 +584,18 @@ Alles wird zusammen gebucht oder gar nichts.</p>
     <label>Neues Teilstück<input name="name" required maxlength="30" placeholder="z. B. Haxe"></label>
     <label>So sage ich es auch (freiwillig)<input name="varianten" maxlength="120" placeholder="z. B. Hachse, Haxen"></label>
   </div>
+  <label class="haken"><input type="checkbox" name="zaehlbar" value="1"> Stückzahl aufs Etikett
+    <span class="leise">– „4 mal Schnitzel“ druckt dann <b>ein</b> Etikett „4x Schnitzel“</span></label>
   <p class="leise">Danach geht sofort „Etikett Haxe“, „drucke 3 Etiketten Haxe“ oder „Haxe 800 Gramm“.</p>
   <p><button class="gross">Anlegen</button></p>
 </form>
 <h2>Eigene Teilstücke</h2>
 <div class="karte" style="padding:4px 14px">
 {% for t in eigene %}<div style="display:flex;align-items:center;gap:10px;padding:10px 0;{{ 'border-top:1px solid var(--linie)' if not loop.first }}">
-  <span style="flex:1;min-width:0"><b>{{ t.name }}</b>{% if t.varianten %}<br><span class="leise">auch: {{ t.varianten }}</span>{% endif %}</span>
+  <span style="flex:1;min-width:0"><b>{{ t.name }}</b>{% if t.varianten %}<br><span class="leise">auch: {{ t.varianten }}</span>{% endif %}
+    <br><span class="leise">{% if t.zaehlbar %}„4 mal {{ t.name }}“ = ein Etikett „4x {{ t.name }}“{% else %}„4 mal {{ t.name }}“ = vier Etiketten{% endif %}</span></span>
+  <form method="post"><input type="hidden" name="zaehlbar_id" value="{{ t.id }}"><input type="hidden" name="an" value="{{ '0' if t.zaehlbar else '1' }}">
+    <button class="neben klein">{{ 'Stückzahl aus' if t.zaehlbar else 'Stückzahl an' }}</button></form>
   <form method="post" onsubmit="return confirm('{{ t.name }} löschen? Vorhandene Tüten bleiben.')">
     <button class="neben klein" name="loeschen" value="{{ t.id }}" aria-label="{{ t.name }} löschen">{{ eimer|safe }}</button></form>
 </div>{% else %}<p class="leise">Noch keine eigenen Teilstücke.</p>{% endfor %}

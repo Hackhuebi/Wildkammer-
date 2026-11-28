@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 
 from flask import Flask, Response, abort, jsonify, redirect, render_template_string, request, url_for
 
+import druck
+import teile
 import zahlen
 from db import Datenbank, Fehler, code
 
@@ -140,7 +142,7 @@ SYMBOLE = {
 # Welcher Reiter unten leuchtet: nach dem ersten Pfadteil.
 BEREICH = {"": "heute", "heute": "heute", "fleisch": "fleisch", "s": "fleisch", "wurst": "wurst", "w": "wurst", "preise": "wurst",
            "bestellungen": "bestellungen", "packliste": "bestellungen",
-           "kunden": "mehr", "auswertung": "mehr", "teilstuecke": "mehr", "scan": "mehr", "sicherung": "mehr", "mehr": "mehr"}
+           "kunden": "mehr", "auswertung": "mehr", "teilstuecke": "mehr", "etikett": "fleisch", "scan": "mehr", "sicherung": "mehr", "mehr": "mehr"}
 
 RAHMEN = """<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -176,6 +178,7 @@ BESTAND = RAHMEN + """
   <div class="zahl"><b>{{ aktiv.art if aktiv else '–' }}</b>
     <span class="leise">{{ 'aktive Wildart, Stück ' ~ aktiv.id if aktiv else 'keine Wildart aktiv' }}</span></div>
 </div>
+<a class="knopf" href="{{ url_for('etikett_von_hand') }}" style="margin:12px 0">Etikett von Hand</a>
 <h2>Auswahl</h2>
 <form class="filter karte" method="get">
   <label>Status<select name="status">
@@ -214,12 +217,13 @@ TUETE = RAHMEN + """
 <a class="zurueck" href="{{ url_for('bestand') }}">{{ pfeil|safe }} Zurück zum Fleisch</a>
 <div class="karte">
   <p class="leise">{{ code(p.id) }} · Stück {{ p.stueck_id }} · {{ namen[p.status] }}</p>
-  <p class="etikett">{{ p.art }} – {{ p.teil }}</p>
+  <p class="etikett">{{ p.art }} – {% if p.stueckzahl %}{{ p.stueckzahl }}x {% endif %}{{ p.teil }}</p>
   <p>Eingepackt am {{ de(p.datum) }}{% if p.gewicht_g %} · {{ p.gewicht_g }} g{% endif %}</p>
   {% if p.status == 'entwurf' %}
   <p><b>Nicht eingebucht.</b> Der Drucker hat beim Druck einen Fehler gemeldet. Wenn du dieses Etikett in der Hand hast,
   wurde es doch gedruckt.</p>
   <form method="post" action="{{ url_for('tuete_einbuchen', nummer=p.id) }}"><button class="gross">Jetzt einbuchen</button></form>
+  <form method="post" action="{{ url_for('tuete_drucken', nummer=p.id) }}" style="margin-top:8px"><button class="neben gross">Nochmal drucken</button></form>
   {% elif p.status == 'lager' %}
   <form method="post" action="{{ url_for('tuete_aus', nummer=p.id) }}"><button class="gross">Auslagern</button></form>
   {% elif p.status in ('raus', 'storniert') %}
@@ -232,12 +236,36 @@ TUETE = RAHMEN + """
   <label>Gramm<input name="gramm" type="number" inputmode="numeric" min="1" max="50000" value="{{ p.gewicht_g or '' }}"></label>
   <button class="neben">Speichern</button>
 </form>
+{% if p.status == 'lager' %}
+<form method="post" action="{{ url_for('tuete_drucken', nummer=p.id) }}" style="margin-top:12px"><button class="neben gross">Etikett nochmal drucken</button></form>
+{% endif %}
 {% if p.status != 'storniert' %}
 <h2>Löschen</h2>
 <div class="karte"><a class="eimer" style="margin:0;padding:0;align-items:center;gap:8px;font-weight:600"
   href="{{ url_for('tuete_loeschen', nummer=p.id) }}">{{ eimer|safe }} Diese Tüte löschen</a></div>
 {% endif %}
 {% endif %}
+""" + ENDE
+
+HAND = RAHMEN + """
+<a class="zurueck" href="{{ url_for('bestand') }}">{{ pfeil|safe }} Zurück zum Fleisch</a>
+<form method="post" class="karte">
+  <label>Wildart<input name="art" list="arten" required maxlength="24" autocomplete="off" value="{{ w.art }}" placeholder="z. B. Reh"></label>
+  <datalist id="arten">{% for a in arten %}<option value="{{ a }}">{% endfor %}</datalist>
+  <label>Teilstück<input name="teil" list="teile" required maxlength="18" autocomplete="off" value="{{ w.teil }}" placeholder="z. B. Keule"></label>
+  <datalist id="teile">{% for a in teilliste %}<option value="{{ a }}">{% endfor %}</datalist>
+  <label>Eingepackt am<input name="datum" type="date" required max="{{ heute }}" value="{{ w.datum }}"></label>
+  <div class="zeile" style="gap:10px">
+    <label style="flex:1">Gramm (freiwillig)<input name="gramm" type="number" inputmode="numeric" min="1" max="50000" value="{{ w.gramm }}"></label>
+    <label style="flex:1">Stück in der Tüte<input name="stueckzahl" type="number" inputmode="numeric" min="2" max="50" value="{{ w.stueckzahl }}" placeholder="z. B. 4"></label>
+  </div>
+  <div class="zeile" style="gap:10px">
+    <label style="flex:1">Anzahl Etiketten<input name="anzahl" type="number" inputmode="numeric" min="1" max="20" value="{{ w.anzahl }}"></label>
+  </div>
+  <p class="leise">Jedes Etikett bekommt eine eigene Nummer mit QR-Code und kommt nach dem Druck ins Lager.
+  Die Wildart der Sprachsteuerung bleibt dabei unverändert.</p>
+  <button class="gross">Drucken</button>
+</form>
 """ + ENDE
 
 LOESCHEN = RAHMEN + """
@@ -395,7 +423,8 @@ def erstelle_app(pfad, uhr=None):
         teil = _text(daten, "teil")
         if not teil:
             raise Fehler("eingabe_fehlt")
-        return jsonify(ok=True, **d.anlegen(teil, _gewicht(daten.get("gewicht_g"))))
+        stk = _ganz(daten.get("stueckzahl"))
+        return jsonify(ok=True, **d.anlegen(teil, _gewicht(daten.get("gewicht_g")), stk if 1 < stk <= 50 else None))
 
     @app.post("/api/eingabe")
     def api_eingabe():
@@ -513,6 +542,66 @@ def erstelle_app(pfad, uhr=None):
         g = _ganz(request.form.get("gramm"))
         d.gewicht(nummer, g if 0 < g <= 50000 else None)
         return redirect(url_for("tuete", nummer=nummer, m="Gewicht gespeichert."), 303)
+
+    def _drucken(etikett):
+        return app.config.get("DRUCKEN", druck.drucken)(etikett)
+
+    @app.post("/s/<int:nummer>/drucken")
+    def tuete_drucken(nummer):
+        p = _tuete_oder_404(nummer, entwurf_ok=True)
+        if not _drucken(d.etikett(nummer)):
+            return redirect(url_for("tuete", nummer=nummer, m="Der Drucker hat einen Fehler gemeldet."), 303)
+        if p["status"] == "entwurf":
+            d.gedruckt(nummer)
+            return redirect(url_for("tuete", nummer=nummer, m="Gedruckt und eingebucht."), 303)
+        return redirect(url_for("tuete", nummer=nummer, m="Gedruckt."), 303)
+
+    @app.route("/etikett", methods=["GET", "POST"])
+    def etikett_von_hand():
+        heute = d.uhr().date().isoformat()
+        aktiv = d.aktiv()
+        w = dict(art=aktiv["art"] if aktiv else "", teil="", datum=heute, gramm="", stueckzahl="", anzahl="1")
+        fehler = None
+        if request.method == "POST":
+            w = {k: (request.form.get(k) or "").strip() for k in w}
+            art = " ".join(w["art"].split())
+            teil = " ".join(w["teil"].split())
+            gramm = _ganz(w["gramm"])
+            anzahl = _ganz(w["anzahl"]) or 1
+            stk = _ganz(w["stueckzahl"])
+            if not 0 < len(art) <= 24:
+                fehler = "Bitte eine Wildart eintragen (höchstens 24 Zeichen)."
+            elif not 0 < len(teil) <= 18:
+                fehler = "Bitte ein Teilstück eintragen (höchstens 18 Zeichen)."
+            elif not re.fullmatch(r"\d{4}-\d{2}-\d{2}", w["datum"]) or not "2000-01-01" <= w["datum"] <= heute:
+                fehler = "Das Datum darf nicht in der Zukunft liegen."
+            elif w["gramm"] and not 0 < gramm <= 50000:
+                fehler = "Das Gewicht muss zwischen 1 und 50000 Gramm liegen."
+            elif w["stueckzahl"] and not 1 <= stk <= 50:
+                fehler = "Stück in der Tüte: 1 bis 50."
+            elif not 1 <= anzahl <= 20:
+                fehler = "Bitte 1 bis 20 Etiketten."
+            else:
+                sid = d.stueck_von_hand(art)
+                fertig = 0
+                for _ in range(anzahl):
+                    e = d.anlegen_von_hand(sid, art, teil, w["datum"], gramm or None, stk if stk > 1 else None)
+                    if not _drucken(e):
+                        break
+                    d.gedruckt(int(e["nummer"]))
+                    fertig += 1
+                if fertig == anzahl:
+                    m = f"{fertig} {'Etikett' if fertig == 1 else 'Etiketten'} {art} – {teil} gedruckt und eingebucht."
+                else:
+                    m = (f"{fertig} von {anzahl} gedruckt. Beim nächsten meldete der Drucker einen Fehler; "
+                         "es steht oben unter „Nicht eingebucht“.")
+                return redirect(url_for("bestand", m=m), 303)
+        wahl = d.auswahl()
+        vk = app.config.get("VERKAUF")
+        eigene = [t["name"] for t in vk.teilstuecke()] if vk else []
+        teilliste = list(dict.fromkeys(teile.STANDARD + eigene + wahl["teile"]))
+        return render_template_string(HAND, titel="Etikett von Hand", w=w, fehler=bool(fehler), meldung=fehler, heute=heute,
+                                      arten=wahl["arten"], teilliste=teilliste, **kontext)
 
     @app.route("/scan", methods=["GET", "POST"])
     def scan():

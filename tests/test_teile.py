@@ -46,3 +46,50 @@ def test_eingespielt_wird_nur_die_erzeugte_datei(tmp_path, monkeypatch):
     assert (ha / "packages" / "wildetikett.yaml").read_text() == "bleibt\n"
     assert aufrufe[-1] == "/services/homeassistant/reload_all"
     assert e.einspielen(ha_api, lambda *a: None, erzeugt={"wildkammer_teile.yaml": "x: 1\n"}, nur_erzeugt=True) == "gleich"
+
+
+def test_etikett_von_hand(c):
+    gedruckt = []
+    c.application.config["DRUCKEN"] = lambda e: gedruckt.append(e) or True
+    html = c.get("/etikett").get_data(as_text=True)
+    assert "Oberschale" in html and 'type="date"' in html
+    r = c.post("/etikett", data={"art": "Reh", "teil": "Keule ausgelöst", "datum": "2025-10-03",
+                                 "gramm": "900", "anzahl": "2"})
+    assert "2+Etiketten" in r.headers["Location"]
+    assert [e["datum"] for e in gedruckt] == ["03.10.2025", "03.10.2025"]
+    assert gedruckt[0]["teil"] == "Keule ausgelöst" and gedruckt[0]["gewicht_text"] == "900 g"
+    # Aktive Wildart der Sprachsteuerung bleibt unberührt
+    assert c.get("/api/status").get_json()["art"] == ""
+    # Zukunftsdatum abgelehnt
+    assert c.post("/etikett", data={"art": "Reh", "teil": "Keule", "datum": "2099-01-01"}).status_code == 200
+    # Druckfehler: Rest bleibt als Entwurf, nichts weiter angelegt
+    c.application.config["DRUCKEN"] = lambda e: False
+    c.post("/etikett", data={"art": "Damwild", "teil": "Hack", "datum": "2025-01-01", "anzahl": "3"})
+    html = c.get("/fleisch").get_data(as_text=True)
+    assert html.count("Damwild – Hack") == 1 and "Nicht eingebucht" in html
+    # Nochmal drucken bucht den Entwurf ein
+    c.application.config["DRUCKEN"] = lambda e: True
+    nummer = int(gedruckt[-1]["nummer"]) + 1
+    assert "eingebucht" in c.post(f"/s/{nummer}/drucken").headers["Location"]
+
+
+def test_stueckzahl_schnitzel(c):
+    c.post("/teilstuecke", data={"name": "Schnitzel"})
+    vk = c.application.config["VERKAUF"]
+    tid = vk.teilstuecke()[0]["id"]
+    ids = lambda: [t["id"] for t in yaml.safe_load(vk.teile_paket())["wildkammer_teile"]["automation"][0]["triggers"]]
+    assert "Schnitzel#menge" in ids()
+    c.post("/teilstuecke", data={"zaehlbar_id": str(tid), "an": "1"})
+    assert ids() == ["Schnitzel", "Schnitzel#stueck", "Schnitzel#drucke"]
+    a = yaml.safe_load(vk.teile_paket())["wildkammer_teile"]["automation"][0]
+    assert "#stueck" in a["actions"][2]["data"]["stueckzahl"]
+    # Sprachweg: Add-on bekommt stueckzahl und liefert das Etikett „4x Schnitzel“
+    c.post("/api/wildart", json={"art": "Reh"})
+    e = c.post("/api/anlegen", json={"teil": "Schnitzel", "gewicht_g": 0, "stueckzahl": 4}).get_json()
+    assert e["teil"] == "Schnitzel" and e["teil_etikett"] == "4x Schnitzel"
+    e = c.post("/api/anlegen", json={"teil": "Hack", "gewicht_g": 0, "stueckzahl": 0}).get_json()
+    assert e["teil_etikett"] == "Hack"
+    # Von Hand
+    c.application.config["DRUCKEN"] = lambda e: e["teil_etikett"] == "5x Schnitzel"
+    r = c.post("/etikett", data={"art": "Reh", "teil": "Schnitzel", "datum": "2025-12-01", "stueckzahl": "5"})
+    assert "eingebucht" in r.headers["Location"]

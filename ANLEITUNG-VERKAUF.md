@@ -145,6 +145,13 @@ Das Add-on schreibt dann `packages/wildkammer_teile.yaml`, lässt Home Assistant
 Danach gehen sofort „Etikett Haxe“, „drucke 3 Etiketten Haxe“ und „Haxe 800 Gramm“.
 Die Standard-Teilstücke (Braten, Keule, Rücken …) sind immer dabei und lassen sich nicht löschen.
 
+## Etikett von Hand und Stückzahl (ab 2.21.0)
+Fleisch → „Etikett von Hand“: Wildart, Teilstück (frei), Datum (z. B. für Eingefrorenes), Gramm, Stück in der Tüte, Anzahl.
+Druckt über Home Assistant mit QR-Code und bucht ein. Meldet der Drucker einen Fehler, steht die Tüte unter „Nicht eingebucht“.
+Auf jeder Tüten-Seite gibt es „Etikett nochmal drucken“.
+Mehr → Teilstücke → „Stückzahl an“: Dann druckt „4 mal Schnitzel“ ein Etikett „4x Schnitzel“ (statt vier Etiketten).
+Mehrere Etiketten dann mit „drucke 3 Etiketten Schnitzel“.
+
 ## Grenzen
 
 - **Verhörer und Fehlzuordnungen:** Claude kann sich verhören oder einen Kunden falsch zuordnen. Die Rückmeldung nach jeder Buchung ist deine Kontrolle. Ein Fehler lässt sich stornieren, solange nichts geliefert ist.

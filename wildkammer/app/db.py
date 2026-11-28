@@ -61,6 +61,8 @@ class Datenbank:
         try:
             v.execute("PRAGMA journal_mode=WAL")
             v.executescript(SCHEMA)
+            if "stueckzahl" not in [z[1] for z in v.execute("PRAGMA table_info(pakete)")]:
+                v.execute("ALTER TABLE pakete ADD COLUMN stueckzahl INTEGER")
         finally:
             v.close()
 
@@ -120,7 +122,7 @@ class Datenbank:
                 raise Fehler("wildart_fehlt")
             return {"art": z["art"], "stueck": self._neues_stueck(v, z["art"]), "neu": True}
 
-    def anlegen(self, teil, gewicht_g=None):
+    def anlegen(self, teil, gewicht_g=None, stueckzahl=None):
         """Reserviert eine Nummer. Im Bestand zählt die Tüte erst nach dem Druck."""
         with self._verbindung() as v:
             z = self._aktiv(v)
@@ -128,12 +130,32 @@ class Datenbank:
                 raise Fehler("wildart_fehlt")
             jetzt = self.uhr()
             c = v.execute(
-                "INSERT INTO pakete(stueck_id, art, teil, datum, gewicht_g, erstellt) "
-                "VALUES(?, ?, ?, ?, ?, ?)",
-                (z["id"], z["art"], teil, jetzt.date().isoformat(), gewicht_g, jetzt.isoformat()),
+                "INSERT INTO pakete(stueck_id, art, teil, datum, gewicht_g, erstellt, stueckzahl) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                (z["id"], z["art"], teil, jetzt.date().isoformat(), gewicht_g, jetzt.isoformat(), stueckzahl or None),
             )
             self._verlaengern(v, z["id"])
             return self._etikett(v, c.lastrowid)
+
+    def stueck_von_hand(self, art):
+        """Eigenes Stück für Etiketten von Hand. Die aktive Wildart der Sprachsteuerung bleibt unberührt."""
+        with self._verbindung() as v:
+            return v.execute("INSERT INTO stuecke(art, begonnen) VALUES(?, ?)",
+                             (art, self.uhr().isoformat())).lastrowid
+
+    def anlegen_von_hand(self, stueck_id, art, teil, datum, gewicht_g=None, stueckzahl=None):
+        """Wie anlegen, aber mit frei gewähltem Datum (z. B. zum Nachetikettieren von Eingefrorenem)."""
+        with self._verbindung() as v:
+            c = v.execute(
+                "INSERT INTO pakete(stueck_id, art, teil, datum, gewicht_g, erstellt, stueckzahl) VALUES(?, ?, ?, ?, ?, ?, ?)",
+                (stueck_id, art, teil, datum, gewicht_g, self.uhr().isoformat(), stueckzahl or None))
+            return self._etikett(v, c.lastrowid)
+
+    def etikett(self, nummer):
+        with self._verbindung() as v:
+            if not v.execute("SELECT 1 FROM pakete WHERE id=?", (nummer,)).fetchone():
+                raise Fehler("nicht_gefunden")
+            return self._etikett(v, nummer)
 
     def gedruckt(self, nummer):
         with self._verbindung() as v:
@@ -153,6 +175,9 @@ class Datenbank:
             "code": code(p["id"]),
             "art": p["art"],
             "teil": p["teil"],
+            "stueckzahl": p["stueckzahl"],
+            # Fürs Etikett: "4x Schnitzel", wenn eine Stückzahl genannt wurde
+            "teil_etikett": f"{p['stueckzahl']}x {p['teil']}" if p["stueckzahl"] else p["teil"],
             "datum": f"{t}.{m}.{j}",
             "stueck": p["stueck_id"],
             "gewicht_g": p["gewicht_g"],
