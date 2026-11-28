@@ -1,5 +1,6 @@
 """Weboberfläche und Schnittstelle der Wildkammer."""
 import csv
+import json
 import io
 import os
 import re
@@ -164,11 +165,12 @@ ENDE = "</main></body></html>"
 BESTAND = RAHMEN + """
 {% if entwuerfe %}<h2>Nicht eingebucht</h2>
 <div class="karte">
-  <p class="leise">Hier meldete der Drucker einen Fehler. Hast du das Etikett, tippe auf Einbuchen. Kam keins, auf Verwerfen.</p>
-  {% for p in entwuerfe %}<div class="zeile" style="justify-content:space-between;align-items:center;gap:8px;margin:8px 0">
+  <p class="leise">Hier meldete der Drucker einen Fehler. Kam kein Etikett: Nochmal drucken. Hast du es doch: Einbuchen. Brauchst du es nicht: Verwerfen.</p>
+  {% for p in entwuerfe %}<div class="zeile" style="justify-content:space-between;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap">
     <span><b>{{ p.art }} – {{ p.teil }}</b><br><span class="leise">{{ code(p.id) }} · {{ de(p.datum) }}{% if p.gewicht_g %} · {{ p.gewicht_g }} g{% endif %}</span></span>
     <span style="display:flex;gap:6px">
-      <form method="post" action="{{ url_for('tuete_einbuchen', nummer=p.id) }}"><input type="hidden" name="zurueck" value="liste"><button>Einbuchen</button></form>
+      <form method="post" action="{{ url_for('tuete_drucken', nummer=p.id) }}"><input type="hidden" name="zurueck" value="liste"><button>Nochmal drucken</button></form>
+      <form method="post" action="{{ url_for('tuete_einbuchen', nummer=p.id) }}"><input type="hidden" name="zurueck" value="liste"><button class="neben">Einbuchen</button></form>
       <form method="post" action="{{ url_for('tuete_verwerfen', nummer=p.id) }}"><button class="neben">Verwerfen</button></form>
     </span></div>{% endfor %}
 </div>{% endif %}
@@ -249,6 +251,23 @@ TUETE = RAHMEN + """
 
 HAND = RAHMEN + """
 <a class="zurueck" href="{{ url_for('bestand') }}">{{ pfeil|safe }} Zurück zum Fleisch</a>
+{% if nicht %}<div class="karte" style="border-color:var(--warn)">
+  <p><b>{{ code(nicht.id) }} · {{ nicht.art }} – {{ nicht.teil }}</b> ist nicht eingebucht.{% if rest %} Danach noch {{ rest }} offen.{% endif %}</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <form method="post" action="{{ url_for('tuete_drucken', nummer=nicht.id) }}" style="flex:1">
+      <input type="hidden" name="zurueck" value="etikett"><input type="hidden" name="rest" value="{{ rest or '' }}">
+      <button class="gross" style="width:100%">Erneut drucken</button></form>
+    <form method="post" action="{{ url_for('tuete_einbuchen', nummer=nicht.id) }}"><input type="hidden" name="zurueck" value="etikett"><button class="neben">Kam doch</button></form>
+    <form method="post" action="{{ url_for('tuete_verwerfen', nummer=nicht.id) }}"><input type="hidden" name="zurueck" value="etikett"><button class="neben">Verwerfen</button></form>
+  </div></div>{% endif %}
+{% if letzte %}<h2>Zuletzt</h2>
+<div class="karte" style="padding:4px 14px">{% for e in letzte %}
+  <a href="{{ url_for('etikett_von_hand', v=loop.index0) }}" class="zeile" style="display:flex;justify-content:space-between;gap:8px;padding:10px 0;{{ 'border-top:1px solid var(--linie);' if not loop.first }}text-decoration:none;color:inherit">
+    <span><b>{{ e.art }} – {% if e.stueckzahl and e.stueckzahl|int > 1 %}{{ e.stueckzahl }}x {% endif %}{{ e.teil }}</b><br>
+    <span class="leise">{{ {'heute': 'Datum heute', 'monat': (e.monat[5:7] ~ '/' ~ e.monat[:4]) if e.monat else 'Monat', 'tag': de(e.datum) if e.datum else 'Tag', 'keins': 'ohne Datum'}.get(e.datum_art, '') }}{% if e.gramm %} · {{ e.gramm }} g{% endif %}{% if e.preis %} · mit Preis{% endif %}</span></span>
+    <span class="leise" style="align-self:center">›</span></a>{% endfor %}
+</div>{% endif %}
+<h2>Etikett</h2>
 <form method="post" class="karte">
   <label>Wildart<input name="art" list="arten" required maxlength="24" autocomplete="off" value="{{ w.art }}" placeholder="z. B. Reh"></label>
   <datalist id="arten">{% for a in arten %}<option value="{{ a }}">{% endfor %}</datalist>
@@ -518,11 +537,15 @@ def erstelle_app(pfad, uhr=None):
             d.gedruckt(nummer)
         if request.form.get("zurueck") == "liste":
             return redirect(url_for("bestand", m=f"{code(nummer)} eingebucht."), 303)
+        if request.form.get("zurueck") == "etikett":
+            return redirect(url_for("etikett_von_hand", v=0, m=f"{code(nummer)} eingebucht."), 303)
         return redirect(url_for("tuete", nummer=nummer, m="Eingebucht."), 303)
 
     @app.post("/s/<int:nummer>/verwerfen")
     def tuete_verwerfen(nummer):
         d.entwurf_verwerfen(nummer)
+        if request.form.get("zurueck") == "etikett":
+            return redirect(url_for("etikett_von_hand", v=0, m=f"{code(nummer)} verworfen."), 303)
         return redirect(url_for("bestand", m=f"{code(nummer)} verworfen."), 303)
 
     @app.post("/s/<int:nummer>/aus")
@@ -552,18 +575,46 @@ def erstelle_app(pfad, uhr=None):
         d.gewicht(nummer, g if 0 < g <= 50000 else None)
         return redirect(url_for("tuete", nummer=nummer, m="Gewicht gespeichert."), 303)
 
+    def _letzte_eingaben(vk):
+        if not vk:
+            return []
+        try:
+            return json.loads(vk.einstellung("etikett_letzte") or "[]")
+        except ValueError:
+            return []
+
+    def _eingabe_merken(vk, w):
+        """Die letzten 8 Eingaben fürs Etikett von Hand; gleiche Eingaben (bis aufs Gewicht) nur einmal."""
+        if not vk:
+            return
+        felder = ("art", "teil", "datum_art", "monat", "datum", "stueckzahl", "preis")
+        neu = {k: w.get(k, "") for k in felder + ("gramm",)}
+        schluessel = lambda e: tuple(str(e.get(k, "")).lower() for k in felder if k != "datum" or e.get("datum_art") == "tag")
+        liste = [neu] + [e for e in _letzte_eingaben(vk) if schluessel(e) != schluessel(neu)]
+        vk.einstellung_setzen("etikett_letzte", json.dumps(liste[:8], ensure_ascii=False))
+
     def _drucken(etikett):
         return app.config.get("DRUCKEN", druck.drucken)(etikett)
 
     @app.post("/s/<int:nummer>/drucken")
     def tuete_drucken(nummer):
         p = _tuete_oder_404(nummer, entwurf_ok=True)
-        if not _drucken(d.etikett(nummer)):
-            return redirect(url_for("tuete", nummer=nummer, m="Der Drucker hat einen Fehler gemeldet."), 303)
-        if p["status"] == "entwurf":
+        zurueck = request.form.get("zurueck")
+        rest = _ganz(request.form.get("rest"))
+        ok = _drucken(d.etikett(nummer))
+        if ok and p["status"] == "entwurf":
             d.gedruckt(nummer)
-            return redirect(url_for("tuete", nummer=nummer, m="Gedruckt und eingebucht."), 303)
-        return redirect(url_for("tuete", nummer=nummer, m="Gedruckt."), 303)
+        if zurueck == "etikett":
+            if not ok:
+                return redirect(url_for("etikett_von_hand", nicht=nummer, rest=rest or None, v=0,
+                                        m="Wieder nicht gedruckt. Drucker an und in der Nähe?"), 303)
+            m = "Gedruckt und eingebucht." + (f" Noch {rest} offen – tippe unten auf Drucken." if rest else "")
+            return redirect(url_for("etikett_von_hand", v=0, rest=rest or None, m=m), 303)
+        if zurueck == "liste":
+            return redirect(url_for("bestand", m="Gedruckt und eingebucht." if ok else "Der Drucker hat wieder einen Fehler gemeldet."), 303)
+        if not ok:
+            return redirect(url_for("tuete", nummer=nummer, m="Der Drucker hat einen Fehler gemeldet."), 303)
+        return redirect(url_for("tuete", nummer=nummer, m="Gedruckt und eingebucht." if p["status"] == "entwurf" else "Gedruckt."), 303)
 
     @app.route("/etikett", methods=["GET", "POST"])
     def etikett_von_hand():
@@ -572,6 +623,17 @@ def erstelle_app(pfad, uhr=None):
         w = dict(art=aktiv["art"] if aktiv else "", teil="", datum_art="heute", monat=heute[:7], datum=heute,
                  gramm="", stueckzahl="", anzahl="1", preis="")
         fehler = None
+        vk = app.config.get("VERKAUF")
+        letzte = _letzte_eingaben(vk)
+        if request.method == "GET":
+            v = request.args.get("v")
+            if v is not None and v.isdigit() and int(v) < len(letzte):
+                w.update({k: letzte[int(v)].get(k, w[k]) for k in w})
+                w["anzahl"] = "1"
+                if w["datum_art"] == "heute":
+                    w["datum"] = heute
+            if _ganz(request.args.get("rest")):
+                w["anzahl"] = str(_ganz(request.args.get("rest")))
         if request.method == "POST":
             w = {k: (request.form.get(k) or "").strip() for k in w}
             art = " ".join(w["art"].split())
@@ -604,6 +666,7 @@ def erstelle_app(pfad, uhr=None):
             elif not 1 <= anzahl <= 20:
                 fehler = "Bitte 1 bis 20 Etiketten."
             else:
+                _eingabe_merken(vk, dict(w, art=art, teil=teil))
                 sid = d.stueck_von_hand(art)
                 fertig = 0
                 for _ in range(anzahl):
@@ -617,15 +680,22 @@ def erstelle_app(pfad, uhr=None):
                     fertig += 1
                 if fertig == anzahl:
                     m = f"{fertig} {'Etikett' if fertig == 1 else 'Etiketten'} {art} – {teil} gedruckt und eingebucht."
-                else:
-                    m = (f"{fertig} von {anzahl} gedruckt. Beim nächsten meldete der Drucker einen Fehler; "
-                         "es steht oben unter „Nicht eingebucht“.")
-                return redirect(url_for("bestand", m=m), 303)
+                    return redirect(url_for("etikett_von_hand", v=0, m=m), 303)
+                m = ("Der Drucker hat nicht gedruckt." if not fertig else
+                     f"{fertig} von {anzahl} gedruckt, beim nächsten kam ein Fehler.")
+                return redirect(url_for("etikett_von_hand", nicht=e["nummer"], rest=anzahl - fertig - 1 or None,
+                                        v=0, m=m), 303)
+        nicht = None
+        if request.method == "GET" and _ganz(request.args.get("nicht")):
+            nicht = d.paket(_ganz(request.args.get("nicht")))
+            if nicht and nicht["status"] != "entwurf":
+                nicht = None
         wahl = d.auswahl()
-        vk = app.config.get("VERKAUF")
         eigene = [t["name"] for t in vk.teilstuecke()] if vk else []
         teilliste = list(dict.fromkeys(teile.STANDARD + eigene + wahl["teile"]))
-        return render_template_string(HAND, titel="Etikett von Hand", w=w, fehler=bool(fehler), meldung=fehler, heute=heute,
+        return render_template_string(HAND, titel="Etikett von Hand", w=w, fehler=bool(fehler or nicht),
+                                      meldung=fehler or request.args.get("m"), heute=heute, letzte=letzte, nicht=nicht,
+                                      rest=_ganz(request.args.get("rest")),
                                       arten=wahl["arten"], teilliste=teilliste, **kontext)
 
     @app.route("/scan", methods=["GET", "POST"])

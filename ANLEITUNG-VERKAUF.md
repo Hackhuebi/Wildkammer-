@@ -151,6 +151,8 @@ Druckt über Home Assistant mit QR-Code und bucht ein. Meldet der Drucker einen 
 Auf jeder Tüten-Seite gibt es „Etikett nochmal drucken“.
 Datum aufs Etikett: Heute, Monat und Jahr (z. B. 10/2025), bestimmter Tag oder ohne Datum (ab 2.22.0).
 „Preis aufs Etikett“ druckt Kilopreis × Gewicht; braucht Gewicht und einen Kilopreis unter Mehr → Kilopreise Fleisch.
+Druckt der Drucker nicht: oben „Erneut drucken“, die Eingaben bleiben stehen. „Zuletzt“ zeigt die letzten 8 Eingaben zum Antippen (ab 2.23.0).
+Die App versucht jeden Druck zweimal (der B1 wacht oft erst beim ersten Versuch auf).
 Mehr → Teilstücke → „Stückzahl an“: Dann druckt „4 mal Schnitzel“ ein Etikett „4x Schnitzel“ (statt vier Etiketten).
 Mehrere Etiketten dann mit „drucke 3 Etiketten Schnitzel“.
 

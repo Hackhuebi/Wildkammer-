@@ -148,3 +148,27 @@ def test_kilopreise_reihenfolge(c):
     tabelle = html.split("<table>")[1]
     pos = [tabelle.index(f">{a}</a>") for a in ("Schwarzwild", "Reh", "Rotwild", "Damwild")]
     assert pos == sorted(pos)
+
+
+def test_erneut_drucken_und_letzte(c):
+    c.application.config["DRUCKEN"] = lambda e: False
+    r = c.post("/etikett", data={"art": "Schwarzwild", "teil": "Keule", "datum_art": "monat", "monat": "2025-10",
+                                 "gramm": "800", "anzahl": "3"})
+    ziel = r.headers["Location"]
+    assert "nicht=" in ziel and "rest=2" in ziel
+    html = c.get(ziel).get_data(as_text=True)
+    assert "Erneut drucken" in html and "Danach noch 2 offen" in html and 'value="800"' in html
+    nummer = int(ziel.split("nicht=")[1].split("&")[0])
+    c.application.config["DRUCKEN"] = lambda e: True
+    r = c.post(f"/s/{nummer}/drucken", data={"zurueck": "etikett", "rest": "2"})
+    html = c.get(r.headers["Location"]).get_data(as_text=True)
+    assert "Noch 2 offen" in html and 'name="anzahl" type="number" inputmode="numeric" min="1" max="20" value="2"' in html
+    # Zuletzt: gleiche Eingabe mit anderem Gewicht nur einmal, neueste oben
+    c.post("/etikett", data={"art": "Schwarzwild", "teil": "Keule", "datum_art": "monat", "monat": "2025-10", "gramm": "650"})
+    c.post("/etikett", data={"art": "Reh", "teil": "Rücken", "datum_art": "keins"})
+    html = c.get("/etikett").get_data(as_text=True)
+    zuletzt = html.split("Zuletzt")[1].split("<h2>Etikett")[0]
+    assert zuletzt.count("Schwarzwild – Keule") == 1 and zuletzt.index("Reh – Rücken") < zuletzt.index("Schwarzwild")
+    assert "650 g" in zuletzt and "10/2025" in zuletzt
+    html = c.get("/etikett?v=1").get_data(as_text=True)
+    assert 'value="650"' in html and 'value="2025-10"' in html and '<option value="monat" selected' in html
