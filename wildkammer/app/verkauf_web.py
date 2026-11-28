@@ -1055,20 +1055,37 @@ Alles wird zusammen gebucht oder gar nichts.</p>
 <p class="leise">Der Preis einer Tüte ergibt sich aus Kilopreis und Gewicht. Ohne Kilopreis oder Gewicht bleibt er offen.
 Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigener steht.</p>
 <form class="karte form-zeile" method="post">
-  <label>Wildart<input name="art" list="arten" required></label>
-  <label>Teilstück<input name="teil" list="teile" required></label>
-  <label>€ pro kg (leer = löschen)<input name="preis" inputmode="decimal"></label>
+  <label>Wildart<select name="art" required><option value="">– wählen –</option>
+    {% for a in arten %}<option {{ 'selected' if a == wahl_art }}>{{ a }}</option>{% endfor %}</select></label>
+  <label>Teilstück<select name="teil" required><option value="">– wählen –</option>
+    {% for t in teile %}<option {{ 'selected' if t == wahl_teil }}>{{ t }}</option>{% endfor %}</select></label>
+  <label>€ pro kg (leer = löschen)<input name="preis" inputmode="decimal" value="{{ wahl_preis }}"></label>
   <button>Speichern</button>
 </form>
-<datalist id="arten">{% for a in arten %}<option value="{{ a }}">{% endfor %}</datalist>
-<datalist id="teile">{% for t in teile %}<option value="{{ t }}">{% endfor %}</datalist>
+<p class="leise">Zum Ändern auf eine Zeile tippen.</p>
 <div class="karte rollbar"><table><tr><th>Wildart</th><th>Teilstück</th><th class="zahl">€/kg</th></tr>
-{% for p in preise %}<tr><td>{{ p.art }}</td><td>{{ p.teil }}</td><td class="zahl">{{ euro(p.preis_kg_cent) }}</td></tr>
+{% for p in preise %}<tr onclick="location.href='{{ url_for('preise', art=p.art, teil=p.teil) }}'" style="cursor:pointer">
+  <td><a href="{{ url_for('preise', art=p.art, teil=p.teil) }}">{{ p.art }}</a></td><td>{{ p.teil }}</td><td class="zahl">{{ euro(p.preis_kg_cent) }}</td></tr>
 {% else %}<tr><td colspan="3" class="leise">Noch keine Kilopreise.</td></tr>{% endfor %}</table></div>"""
-        frei = vk.fleisch_frei()
-        arten = sorted({f["art"] for f in frei} | {f["art"].split(" ")[0] for f in frei})
-        return seite(vorlage, "Kilopreise", preise=vk.fleischpreise(), arten=arten,
-                     teile=sorted({f["teil"] for f in frei}))
+        # Alles, was es schon gibt: feste Wildarten und Teilstücke, eigene Teilstücke, Bestand und vorhandene Preise
+        preisliste = vk.fleischpreise()
+        wahl = d.auswahl()
+        arten = ["Reh", "Rotwild", "Damwild", "Schwarzwild", "Muffelwild"]
+        for a in wahl["arten"] + [p["art"] for p in preisliste]:
+            for x in (a.split(" ")[0], a):
+                if x.lower() not in [y.lower() for y in arten]:
+                    arten.append(x)
+        teilliste = list(teile.STANDARD) + [t["name"] for t in vk.teilstuecke()]
+        for x in wahl["teile"] + [p["teil"] for p in preisliste]:
+            if x.lower() not in [y.lower() for y in teilliste]:
+                teilliste.append(x)
+        wahl_art, wahl_teil = request.args.get("art", ""), request.args.get("teil", "")
+        vorhanden = next((p for p in preisliste if p["art"].lower() == wahl_art.lower()
+                          and p["teil"].lower() == wahl_teil.lower()), None)
+        wahl_preis = f"{vorhanden['preis_kg_cent'] / 100:.2f}".replace(".", ",") if vorhanden else ""
+        return seite(vorlage, "Kilopreise", preise=preisliste, arten=arten, teile=teilliste,
+                     wahl_art=next((a for a in arten if a.lower() == wahl_art.lower()), ""),
+                     wahl_teil=next((x for x in teilliste if x.lower() == wahl_teil.lower()), ""), wahl_preis=wahl_preis)
 
     @app.get("/kunden")
     def kunden():

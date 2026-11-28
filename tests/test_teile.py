@@ -114,3 +114,13 @@ def test_etikett_datum_und_preis(c):
     c.post(f"/s/{n}/drucken")
     assert gedruckt[-1]["preis_text"] == "18,00 €"
     assert "Eingepackt 10/2025" in c.get(f"/s/{n - 2}").get_data(as_text=True)
+
+
+def test_kilopreise_auswahl(c):
+    c.post("/teilstuecke", data={"name": "Schnitzel"})
+    html = c.get("/preise").get_data(as_text=True)
+    assert "<option >Schnitzel</option>" in html.replace("<option  >", "<option >") or ">Schnitzel</option>" in html
+    assert ">Oberschale</option>" in html and ">Schwarzwild</option>" in html
+    c.post("/preise", data={"art": "Reh", "teil": "Schnitzel", "preis": "29,90"})
+    html = c.get("/preise?art=Reh&teil=Schnitzel").get_data(as_text=True)
+    assert 'value="29,90"' in html and "selected>Schnitzel" in html
