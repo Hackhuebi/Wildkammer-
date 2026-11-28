@@ -140,7 +140,7 @@ SYMBOLE = {
 # Welcher Reiter unten leuchtet: nach dem ersten Pfadteil.
 BEREICH = {"": "heute", "heute": "heute", "fleisch": "fleisch", "s": "fleisch", "wurst": "wurst", "w": "wurst", "preise": "wurst",
            "bestellungen": "bestellungen", "packliste": "bestellungen",
-           "kunden": "mehr", "auswertung": "mehr", "scan": "mehr", "sicherung": "mehr", "mehr": "mehr"}
+           "kunden": "mehr", "auswertung": "mehr", "teilstuecke": "mehr", "scan": "mehr", "sicherung": "mehr", "mehr": "mehr"}
 
 RAHMEN = """<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -321,6 +321,7 @@ def erstelle_app(pfad, uhr=None):
   <li><a href="{{ url_for('scan') }}">{{ symbole.scannen|safe }}Scannen</a></li>
   <li><a href="{{ url_for('auswertung') }}">{{ symbole.auswertung|safe }}Auswertung</a></li>
   <li><a href="{{ url_for('erinnerung_seite') }}">{{ symbole.glocke|safe }}Zahlungen &amp; Erinnerung</a></li>
+  <li><a href="{{ url_for('teilstuecke') }}">{{ symbole.fleisch|safe }}Teilstücke</a></li>
   <li><a href="{{ url_for('preise') }}">{{ symbole.preise|safe }}Kilopreise Fleisch</a></li>
   <li><a href="{{ url_for('sicherung') }}">{{ symbole.sicherung|safe }}Sicherung</a></li>
 </ul></div>
@@ -578,7 +579,12 @@ if __name__ == "__main__":
     import einspielen
 
     try:
-        print("Wildkammer: Pakete", einspielen.einspielen(version=VERSION))
+        from verkauf import Verkauf as _V
+        _erzeugt = {}
+        if os.path.exists(os.environ.get("WILDKAMMER_DB", "/data/wildkammer.db")):
+            import teile as _t
+            _erzeugt[_t.DATEI] = _V(Datenbank(os.environ.get("WILDKAMMER_DB", "/data/wildkammer.db"))).teile_paket()
+        print("Wildkammer: Pakete", einspielen.einspielen(version=VERSION, erzeugt=_erzeugt))
     except Exception as fehler:  # Das Lager soll auch dann laufen, wenn das Einspielen scheitert
         print("Wildkammer: Pakete nicht eingespielt:", fehler)
     pfad = os.environ.get("WILDKAMMER_DB", "/data/wildkammer.db")

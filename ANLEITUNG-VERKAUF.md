@@ -139,6 +139,12 @@ Auf dem Etikett stehen Produkt, Packungsnummer (P-…), Datum und ein QR-Code. W
 
 Das Skript **Wildkammer Wurstetiketten drucken** druckt Etiketten mit Produkt und Datum und bucht jede gedruckte Packung ins Lager. Nutz es **statt** des manuellen Zugangs, sonst zählt die Ware doppelt. Scheitert der Druck, wird nichts gebucht.
 
+## Eigene Teilstücke (ab 2.20.0)
+Mehr → Teilstücke: Namen eintragen (z. B. Haxe), optional weitere Aussprachen (Hachse, Haxen) → Anlegen.
+Das Add-on schreibt dann `packages/wildkammer_teile.yaml`, lässt Home Assistant prüfen und lädt neu.
+Danach gehen sofort „Etikett Haxe“, „drucke 3 Etiketten Haxe“ und „Haxe 800 Gramm“.
+Die Standard-Teilstücke (Braten, Keule, Rücken …) sind immer dabei und lassen sich nicht löschen.
+
 ## Grenzen
 
 - **Verhörer und Fehlzuordnungen:** Claude kann sich verhören oder einen Kunden falsch zuordnen. Die Rückmeldung nach jeder Buchung ist deine Kontrolle. Ein Fehler lässt sich stornieren, solange nichts geliefert ist.

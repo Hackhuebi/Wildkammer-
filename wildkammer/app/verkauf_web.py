@@ -3,6 +3,7 @@ import re
 from flask import abort, jsonify, redirect, render_template_string, request, url_for
 
 from db import Fehler, code
+import teile
 from verkauf import KATEGORIEN, Verkauf, euro, wurst_code
 
 FEHLERTEXT = {
@@ -35,6 +36,8 @@ FEHLERTEXT = {
     "packung_nicht_raus": "Diese Packung ist noch im Lager",
     "charge_unbekannt": "Charge nicht gefunden",
     "name_fehlt": "Bitte einen Namen eingeben",
+    "teil_ungueltig": "Bitte nur Buchstaben, Leerzeichen und Bindestrich verwenden (höchstens 30 Zeichen)",
+    "teil_gibt_es": "Dieses Teilstück gibt es schon",
     "text_fehlt": "Bitte einen Text eingeben",
     "text_zu_lang": "Der Text ist zu lang (höchstens 500 Zeichen)",
     "vormerkung_unbekannt": "Notiz nicht gefunden",
@@ -546,6 +549,52 @@ Alles wird zusammen gebucht oder gar nichts.</p>
         return seite(vorlage, "Auswertung", a=a, von=von, bis=bis, produkt=produkt, zeitraeume=zeitraeume,
                      chargen=chargen, zeige_produkt=True,
                      produkte=vk.produkte(nur_aktiv=False))
+
+    # ======================= Teilstücke =======================
+    def _teile_einspielen():
+        """Sprachbefehle für eigene Teilstücke in Home Assistant aktualisieren. Gibt einen Hinweistext zurück."""
+        import einspielen
+        try:
+            ergebnis = einspielen.einspielen(erzeugt={teile.DATEI: vk.teile_paket()}, nur_erzeugt=True,
+                                             melden=lambda *a: None)
+        except Exception as fehler:
+            return f" Sprachbefehle nicht aktualisiert: {fehler}"
+        return {"neu": " Sprachbefehl ist sofort aktiv.", "gleich": "",
+                "zurueck": " Home Assistant hat die Sprachbefehle abgelehnt, es gilt die alte Fassung.",
+                "aus": " (Sprachbefehle nur im Add-on)"}.get(ergebnis, "")
+
+    @app.route("/teilstuecke", methods=["GET", "POST"])
+    def teilstuecke():
+        if request.method == "POST":
+            f = request.form
+            if f.get("loeschen"):
+                vk.teilstueck_loeschen(int(f["loeschen"]))
+                return redirect(url_for("teilstuecke", m="Gelöscht." + _teile_einspielen()), 303)
+            try:
+                name = vk.teilstueck_anlegen(f.get("name"), f.get("varianten"))
+            except Fehler as e:
+                return redirect(url_for("teilstuecke", m=FEHLERTEXT.get(e.kennwort, e.kennwort) + ".", f=1), 303)
+            return redirect(url_for("teilstuecke", m=f"„{name}“ angelegt." + _teile_einspielen()), 303)
+        vorlage = """
+<form class="karte" method="post">
+  <div class="form-zeile">
+    <label>Neues Teilstück<input name="name" required maxlength="30" placeholder="z. B. Haxe"></label>
+    <label>So sage ich es auch (freiwillig)<input name="varianten" maxlength="120" placeholder="z. B. Hachse, Haxen"></label>
+  </div>
+  <p class="leise">Danach geht sofort „Etikett Haxe“, „drucke 3 Etiketten Haxe“ oder „Haxe 800 Gramm“.</p>
+  <p><button class="gross">Anlegen</button></p>
+</form>
+<h2>Eigene Teilstücke</h2>
+<div class="karte" style="padding:4px 14px">
+{% for t in eigene %}<div style="display:flex;align-items:center;gap:10px;padding:10px 0;{{ 'border-top:1px solid var(--linie)' if not loop.first }}">
+  <span style="flex:1;min-width:0"><b>{{ t.name }}</b>{% if t.varianten %}<br><span class="leise">auch: {{ t.varianten }}</span>{% endif %}</span>
+  <form method="post" onsubmit="return confirm('{{ t.name }} löschen? Vorhandene Tüten bleiben.')">
+    <button class="neben klein" name="loeschen" value="{{ t.id }}" aria-label="{{ t.name }} löschen">{{ eimer|safe }}</button></form>
+</div>{% else %}<p class="leise">Noch keine eigenen Teilstücke.</p>{% endfor %}
+</div>
+<h2>Immer dabei</h2>
+<div class="karte"><p class="leise" style="margin:0">{{ standard|join(', ') }}</p></div>"""
+        return seite(vorlage, "Teilstücke", eigene=vk.teilstuecke(), standard=teile.STANDARD)
 
     # ======================= Notizen =======================
     NOTIZEN = """

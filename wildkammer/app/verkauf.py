@@ -117,6 +117,12 @@ CREATE TABLE IF NOT EXISTS chargen (
     kosten_cent INTEGER CHECK (kosten_cent IS NULL OR kosten_cent >= 0),
     notiz TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS teilstuecke (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    varianten TEXT NOT NULL DEFAULT '',
+    erstellt TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS einstellungen (
     schluessel TEXT PRIMARY KEY,
     wert TEXT NOT NULL
@@ -958,6 +964,33 @@ class Verkauf:
                                  "rabatt_cent": rabatt, "lagerwert_cent": max(c["rest"], 0) * p["preis_cent"],
                                  "gewinn_cent": None if c["kosten_cent"] is None else umsatz - c["kosten_cent"]})
         return ergebnis
+
+    # ---------------- Eigene Teilstücke ----------------
+    def teilstuecke(self):
+        with self.d._verbindung() as v:
+            return [dict(z) for z in v.execute("SELECT * FROM teilstuecke ORDER BY name")]
+
+    def teilstueck_anlegen(self, name, varianten=""):
+        import teile
+        name = teile.name_pruefen(name)
+        if not name:
+            raise Fehler("teil_ungueltig")
+        if name.lower() in [t.lower() for t in teile.STANDARD]:
+            raise Fehler("teil_gibt_es")
+        varianten = ", ".join(teile.woerter(name, varianten)[1:])
+        with self.d._verbindung() as v:
+            if v.execute("SELECT 1 FROM teilstuecke WHERE name = ?", (name,)).fetchone():
+                raise Fehler("teil_gibt_es")
+            v.execute("INSERT INTO teilstuecke(name, varianten, erstellt) VALUES(?, ?, ?)", (name, varianten, self._jetzt()))
+        return name
+
+    def teilstueck_loeschen(self, tid):
+        with self.d._verbindung() as v:
+            v.execute("DELETE FROM teilstuecke WHERE id = ?", (tid,))
+
+    def teile_paket(self):
+        import teile
+        return teile.paket([(t["name"], t["varianten"]) for t in self.teilstuecke()])
 
     # ---------------- Einstellungen und Zahlungserinnerung ----------------
     STANDARD = {"paypal": "", "erinnerung_tage": "3", "erinnerung_uhrzeit": "18:00", "erinnerung_ziel": "", "erinnerung_zuletzt": ""}

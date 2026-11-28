@@ -36,16 +36,18 @@ def _melden(titel, text):
         print("Wildkammer: Meldung fehlgeschlagen:", fehler)
 
 
-def einspielen(ha=_ha, melden=_melden, version=""):
-    """Gibt zurück: 'gleich', 'neu', 'zurueck' (Fehler, alte Dateien wiederhergestellt) oder 'aus'."""
-    if not os.path.isdir(QUELLE) or not os.path.isdir(os.path.dirname(ZIEL)):
+def einspielen(ha=_ha, melden=_melden, version="", erzeugt=None, nur_erzeugt=False):
+    """Gibt zurück: 'gleich', 'neu', 'zurueck' (Fehler, alte Dateien wiederhergestellt) oder 'aus'.
+    erzeugt: zusätzliche Dateien {name: inhalt}, die das Add-on selbst erzeugt (z. B. eigene Teilstücke)."""
+    if not os.path.isdir(os.path.dirname(ZIEL)) or (not nur_erzeugt and not os.path.isdir(QUELLE)):
         return "aus"
     os.makedirs(ZIEL, exist_ok=True)
+    dateien = {} if nur_erzeugt else {
+        n: open(os.path.join(QUELLE, n), encoding="utf-8").read()
+        for n in sorted(os.listdir(QUELLE)) if n.endswith(".yaml")}
+    dateien.update(erzeugt or {})
     geaendert = []
-    for name in sorted(os.listdir(QUELLE)):
-        if not name.endswith(".yaml"):
-            continue
-        neu = open(os.path.join(QUELLE, name), encoding="utf-8").read()
+    for name, neu in sorted(dateien.items()):
         ziel = os.path.join(ZIEL, name)
         alt = open(ziel, encoding="utf-8").read() if os.path.exists(ziel) else None
         if alt != neu:
