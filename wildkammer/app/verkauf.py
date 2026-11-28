@@ -520,7 +520,8 @@ class Verkauf:
         """Kilopreis mal Gewicht. Ohne Kilopreis oder Gewicht bleibt der Preis offen."""
         if not paket["gewicht_g"]:
             return None
-        for art in (paket["art"], paket["art"].split(" ")[0]):
+        # Preise gelten je Wildart (Schwarzwild, Reh …), nicht je Bache/Bock. Alte Einträge mit Zusatz nur als Notnagel.
+        for art in (paket["art"].split(" ")[0], paket["art"]):
             z = v.execute("SELECT preis_kg_cent FROM fleischpreise WHERE art = ? AND teil = ?",
                           (art, paket["teil"])).fetchone()
             if z:

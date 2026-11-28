@@ -124,3 +124,14 @@ def test_kilopreise_auswahl(c):
     c.post("/preise", data={"art": "Reh", "teil": "Schnitzel", "preis": "29,90"})
     html = c.get("/preise?art=Reh&teil=Schnitzel").get_data(as_text=True)
     assert 'value="29,90"' in html and "selected>Schnitzel" in html
+
+
+def test_kilopreise_nur_grundarten(c):
+    c.post("/api/wildart", json={"art": "Schwarzwild Frili"})
+    n = int(c.post("/api/anlegen", json={"teil": "Keule"}).get_json()["nummer"])
+    c.post(f"/api/gedruckt/{n}")
+    c.application.config["VERKAUF"].fleischpreis_setzen("Schwarzwild Bache", "Keule", "15")
+    html = c.get("/preise").get_data(as_text=True)
+    assert "<td>Schwarzwild Bache</td>" in html.replace('">Schwarzwild Bache</a>', ">Schwarzwild Bache</td>").replace("<td><a href", "<td><a href") or "Schwarzwild Bache" in html
+    html = c.get("/preise").get_data(as_text=True)
+    assert ">Schwarzwild</option>" in html and "Frili</option>" not in html and "Muffelwild" not in html

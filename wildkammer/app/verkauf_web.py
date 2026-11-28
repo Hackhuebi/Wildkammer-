@@ -1053,7 +1053,7 @@ Alles wird zusammen gebucht oder gar nichts.</p>
         vorlage = """
 <h2>Kilopreise für Fleisch</h2>
 <p class="leise">Der Preis einer Tüte ergibt sich aus Kilopreis und Gewicht. Ohne Kilopreis oder Gewicht bleibt er offen.
-Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigener steht.</p>
+Ein Preis für „Schwarzwild“ gilt für Bache, Keiler und Frischling gleichermaßen, „Reh“ für Bock, Ricke und Kitz.</p>
 <form class="karte form-zeile" method="post">
   <label>Wildart<select name="art" required><option value="">– wählen –</option>
     {% for a in arten %}<option {{ 'selected' if a == wahl_art }}>{{ a }}</option>{% endfor %}</select></label>
@@ -1062,19 +1062,24 @@ Ein Preis für „Reh“ gilt auch für „Reh Bock“, solange dort kein eigene
   <label>€ pro kg (leer = löschen)<input name="preis" inputmode="decimal" value="{{ wahl_preis }}"></label>
   <button>Speichern</button>
 </form>
-<p class="leise">Zum Ändern auf eine Zeile tippen.</p>
-<div class="karte rollbar"><table><tr><th>Wildart</th><th>Teilstück</th><th class="zahl">€/kg</th></tr>
-{% for p in preise %}<tr onclick="location.href='{{ url_for('preise', art=p.art, teil=p.teil) }}'" style="cursor:pointer">
-  <td><a href="{{ url_for('preise', art=p.art, teil=p.teil) }}">{{ p.art }}</a></td><td>{{ p.teil }}</td><td class="zahl">{{ euro(p.preis_kg_cent) }}</td></tr>
-{% else %}<tr><td colspan="3" class="leise">Noch keine Kilopreise.</td></tr>{% endfor %}</table></div>"""
+<p class="leise">Zum Ändern auf die Wildart tippen.</p>
+<div class="karte rollbar"><table><tr><th>Wildart</th><th>Teilstück</th><th class="zahl">€/kg</th><th></th></tr>
+{% for p in preise %}<tr>
+  <td><a href="{{ url_for('preise', art=p.art, teil=p.teil) }}">{{ p.art }}</a>{% if ' ' in p.art %}<br><span class="leise">alter Eintrag</span>{% endif %}</td>
+  <td>{{ p.teil }}</td><td class="zahl">{{ euro(p.preis_kg_cent) }}</td>
+  <td><form method="post" onsubmit="return confirm('Preis {{ p.art }} – {{ p.teil }} löschen?')"><input type="hidden" name="art" value="{{ p.art }}">
+    <input type="hidden" name="teil" value="{{ p.teil }}"><input type="hidden" name="preis" value="">
+    <button class="neben klein" aria-label="Löschen">{{ eimer|safe }}</button></form></td></tr>
+{% else %}<tr><td colspan="4" class="leise">Noch keine Kilopreise.</td></tr>{% endfor %}</table></div>"""
         # Alles, was es schon gibt: feste Wildarten und Teilstücke, eigene Teilstücke, Bestand und vorhandene Preise
         preisliste = vk.fleischpreise()
         wahl = d.auswahl()
-        arten = ["Reh", "Rotwild", "Damwild", "Schwarzwild", "Muffelwild"]
+        # Preise gelten je Wildart, nicht je Bock/Bache/Frischling: nur die Grundart zur Auswahl.
+        arten = ["Reh", "Rotwild", "Damwild", "Schwarzwild"]
         for a in wahl["arten"] + [p["art"] for p in preisliste]:
-            for x in (a.split(" ")[0], a):
-                if x.lower() not in [y.lower() for y in arten]:
-                    arten.append(x)
+            x = a.split(" ")[0]
+            if x.lower() not in [y.lower() for y in arten]:
+                arten.append(x)
         teilliste = list(teile.STANDARD) + [t["name"] for t in vk.teilstuecke()]
         for x in wahl["teile"] + [p["teil"] for p in preisliste]:
             if x.lower() not in [y.lower() for y in teilliste]:
