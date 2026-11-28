@@ -76,6 +76,12 @@ wildetikett:
                 x: 8
                 "y": 134
                 size: 26
+              # Nur bei „Etikett von Hand“ mit Preis
+              - type: text
+                value: "{{ e.preis_text | default(' ') }}"
+                x: 8
+                "y": 166
+                size: 26
               - type: text
                 value: "{{ e.code }}"
                 x: 8

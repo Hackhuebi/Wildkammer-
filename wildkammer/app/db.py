@@ -63,6 +63,10 @@ class Datenbank:
             v.executescript(SCHEMA)
             if "stueckzahl" not in [z[1] for z in v.execute("PRAGMA table_info(pakete)")]:
                 v.execute("ALTER TABLE pakete ADD COLUMN stueckzahl INTEGER")
+            if "datum_art" not in [z[1] for z in v.execute("PRAGMA table_info(pakete)")]:
+                # tag = TT.MM.JJJJ, monat = MM/JJJJ (Rückdatiertes), keins = ohne Datum aufs Etikett
+                v.execute("ALTER TABLE pakete ADD COLUMN datum_art TEXT")
+                v.execute("ALTER TABLE pakete ADD COLUMN preis_cent INTEGER")
         finally:
             v.close()
 
@@ -143,12 +147,15 @@ class Datenbank:
             return v.execute("INSERT INTO stuecke(art, begonnen) VALUES(?, ?)",
                              (art, self.uhr().isoformat())).lastrowid
 
-    def anlegen_von_hand(self, stueck_id, art, teil, datum, gewicht_g=None, stueckzahl=None):
+    def anlegen_von_hand(self, stueck_id, art, teil, datum, gewicht_g=None, stueckzahl=None, datum_art="tag",
+                         preis_cent=None):
         """Wie anlegen, aber mit frei gewähltem Datum (z. B. zum Nachetikettieren von Eingefrorenem)."""
         with self._verbindung() as v:
             c = v.execute(
-                "INSERT INTO pakete(stueck_id, art, teil, datum, gewicht_g, erstellt, stueckzahl) VALUES(?, ?, ?, ?, ?, ?, ?)",
-                (stueck_id, art, teil, datum, gewicht_g, self.uhr().isoformat(), stueckzahl or None))
+                "INSERT INTO pakete(stueck_id, art, teil, datum, gewicht_g, erstellt, stueckzahl, datum_art, preis_cent) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (stueck_id, art, teil, datum, gewicht_g, self.uhr().isoformat(), stueckzahl or None,
+                 None if datum_art == "tag" else datum_art, preis_cent))
             return self._etikett(v, c.lastrowid)
 
     def etikett(self, nummer):
@@ -170,6 +177,8 @@ class Datenbank:
     def _etikett(self, v, nummer):
         p = v.execute("SELECT * FROM pakete WHERE id=?", (nummer,)).fetchone()
         j, m, t = p["datum"].split("-")
+        datum_art = p["datum_art"] or "tag"
+        preis = p["preis_cent"]
         return {
             "nummer": f"{p['id']:06d}",
             "code": code(p["id"]),
@@ -178,7 +187,11 @@ class Datenbank:
             "stueckzahl": p["stueckzahl"],
             # Fürs Etikett: "4x Schnitzel", wenn eine Stückzahl genannt wurde
             "teil_etikett": f"{p['stueckzahl']}x {p['teil']}" if p["stueckzahl"] else p["teil"],
-            "datum": f"{t}.{m}.{j}",
+            # Leerzeichen statt leerem Text, damit das Etikettenfeld gültig bleibt
+            "datum": {"monat": f"{m}/{j}", "keins": " "}.get(datum_art, f"{t}.{m}.{j}"),
+            "datum_art": datum_art,
+            "preis_cent": preis,
+            "preis_text": (f"{preis / 100:.2f}".replace(".", ",") + " €") if preis is not None else " ",
             "stueck": p["stueck_id"],
             "gewicht_g": p["gewicht_g"],
             # Bewusst ein Leerzeichen statt leerem Text: So bleibt das Etikettenfeld gültig.

@@ -149,6 +149,8 @@ Die Standard-Teilstücke (Braten, Keule, Rücken …) sind immer dabei und lasse
 Fleisch → „Etikett von Hand“: Wildart, Teilstück (frei), Datum (z. B. für Eingefrorenes), Gramm, Stück in der Tüte, Anzahl.
 Druckt über Home Assistant mit QR-Code und bucht ein. Meldet der Drucker einen Fehler, steht die Tüte unter „Nicht eingebucht“.
 Auf jeder Tüten-Seite gibt es „Etikett nochmal drucken“.
+Datum aufs Etikett: Heute, Monat und Jahr (z. B. 10/2025), bestimmter Tag oder ohne Datum (ab 2.22.0).
+„Preis aufs Etikett“ druckt Kilopreis × Gewicht; braucht Gewicht und einen Kilopreis unter Mehr → Kilopreise Fleisch.
 Mehr → Teilstücke → „Stückzahl an“: Dann druckt „4 mal Schnitzel“ ein Etikett „4x Schnitzel“ (statt vier Etiketten).
 Mehrere Etiketten dann mit „drucke 3 Etiketten Schnitzel“.
 

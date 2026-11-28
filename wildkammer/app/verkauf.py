@@ -512,6 +512,10 @@ class Verkauf:
                     (art, teil, cent),
                 )
 
+    def tuetenpreis(self, art, teil, gewicht_g):
+        with self.d._verbindung() as v:
+            return self._tuetenpreis(v, {"art": art, "teil": teil, "gewicht_g": gewicht_g})
+
     def _tuetenpreis(self, v, paket):
         """Kilopreis mal Gewicht. Ohne Kilopreis oder Gewicht bleibt der Preis offen."""
         if not paket["gewicht_g"]:

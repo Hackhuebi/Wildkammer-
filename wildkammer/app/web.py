@@ -218,7 +218,7 @@ TUETE = RAHMEN + """
 <div class="karte">
   <p class="leise">{{ code(p.id) }} · Stück {{ p.stueck_id }} · {{ namen[p.status] }}</p>
   <p class="etikett">{{ p.art }} – {% if p.stueckzahl %}{{ p.stueckzahl }}x {% endif %}{{ p.teil }}</p>
-  <p>Eingepackt am {{ de(p.datum) }}{% if p.gewicht_g %} · {{ p.gewicht_g }} g{% endif %}</p>
+  <p>{% if p.datum_art == 'monat' %}Eingepackt {{ p.datum[5:7] }}/{{ p.datum[:4] }}{% elif p.datum_art == 'keins' %}Etikett ohne Datum (angelegt {{ de(p.datum) }}){% else %}Eingepackt am {{ de(p.datum) }}{% endif %}{% if p.gewicht_g %} · {{ p.gewicht_g }} g{% endif %}</p>
   {% if p.status == 'entwurf' %}
   <p><b>Nicht eingebucht.</b> Der Drucker hat beim Druck einen Fehler gemeldet. Wenn du dieses Etikett in der Hand hast,
   wurde es doch gedruckt.</p>
@@ -254,7 +254,14 @@ HAND = RAHMEN + """
   <datalist id="arten">{% for a in arten %}<option value="{{ a }}">{% endfor %}</datalist>
   <label>Teilstück<input name="teil" list="teile" required maxlength="18" autocomplete="off" value="{{ w.teil }}" placeholder="z. B. Keule"></label>
   <datalist id="teile">{% for a in teilliste %}<option value="{{ a }}">{% endfor %}</datalist>
-  <label>Eingepackt am<input name="datum" type="date" required max="{{ heute }}" value="{{ w.datum }}"></label>
+  <label>Datum aufs Etikett<select name="datum_art" id="datum_art" onchange="datumZeigen()">
+    {% for wert, text in [('heute','Heute'),('monat','Monat und Jahr'),('tag','Bestimmter Tag'),('keins','Ohne Datum')] %}
+    <option value="{{ wert }}" {{ 'selected' if w.datum_art == wert }}>{{ text }}</option>{% endfor %}</select></label>
+  <label id="feld_monat">Monat und Jahr<input name="monat" type="month" max="{{ heute[:7] }}" value="{{ w.monat }}"></label>
+  <label id="feld_tag">Tag<input name="datum" type="date" max="{{ heute }}" value="{{ w.datum }}"></label>
+  <script>function datumZeigen(){var a=document.getElementById('datum_art').value;
+    document.getElementById('feld_monat').style.display=a=='monat'?'':'none';
+    document.getElementById('feld_tag').style.display=a=='tag'?'':'none';}datumZeigen();</script>
   <div class="zeile" style="gap:10px">
     <label style="flex:1">Gramm (freiwillig)<input name="gramm" type="number" inputmode="numeric" min="1" max="50000" value="{{ w.gramm }}"></label>
     <label style="flex:1">Stück in der Tüte<input name="stueckzahl" type="number" inputmode="numeric" min="2" max="50" value="{{ w.stueckzahl }}" placeholder="z. B. 4"></label>
@@ -262,6 +269,8 @@ HAND = RAHMEN + """
   <div class="zeile" style="gap:10px">
     <label style="flex:1">Anzahl Etiketten<input name="anzahl" type="number" inputmode="numeric" min="1" max="20" value="{{ w.anzahl }}"></label>
   </div>
+  <label class="haken" style="flex-direction:row;gap:10px;align-items:center"><input type="checkbox" name="preis" value="1" style="width:22px;height:22px;margin:0;flex:none" {{ 'checked' if w.preis }}>
+    Preis aufs Etikett <span class="leise">(Kilopreis × Gewicht)</span></label>
   <p class="leise">Jedes Etikett bekommt eine eigene Nummer mit QR-Code und kommt nach dem Druck ins Lager.
   Die Wildart der Sprachsteuerung bleibt dabei unverändert.</p>
   <button class="gross">Drucken</button>
@@ -560,7 +569,8 @@ def erstelle_app(pfad, uhr=None):
     def etikett_von_hand():
         heute = d.uhr().date().isoformat()
         aktiv = d.aktiv()
-        w = dict(art=aktiv["art"] if aktiv else "", teil="", datum=heute, gramm="", stueckzahl="", anzahl="1")
+        w = dict(art=aktiv["art"] if aktiv else "", teil="", datum_art="heute", monat=heute[:7], datum=heute,
+                 gramm="", stueckzahl="", anzahl="1", preis="")
         fehler = None
         if request.method == "POST":
             w = {k: (request.form.get(k) or "").strip() for k in w}
@@ -569,12 +579,24 @@ def erstelle_app(pfad, uhr=None):
             gramm = _ganz(w["gramm"])
             anzahl = _ganz(w["anzahl"]) or 1
             stk = _ganz(w["stueckzahl"])
+            w["datum_art"] = w["datum_art"] or ("tag" if w["datum"] else "heute")
             if not 0 < len(art) <= 24:
                 fehler = "Bitte eine Wildart eintragen (höchstens 24 Zeichen)."
             elif not 0 < len(teil) <= 18:
                 fehler = "Bitte ein Teilstück eintragen (höchstens 18 Zeichen)."
-            elif not re.fullmatch(r"\d{4}-\d{2}-\d{2}", w["datum"]) or not "2000-01-01" <= w["datum"] <= heute:
-                fehler = "Das Datum darf nicht in der Zukunft liegen."
+            elif w["datum_art"] == "monat" and (not re.fullmatch(r"\d{4}-\d{2}", w["monat"])
+                                                 or not "2000-01" <= w["monat"] <= heute[:7]):
+                fehler = "Bitte Monat und Jahr wählen, nicht in der Zukunft."
+            elif w["datum_art"] == "tag" and (not re.fullmatch(r"\d{4}-\d{2}-\d{2}", w["datum"])
+                                               or not "2000-01-01" <= w["datum"] <= heute):
+                fehler = "Bitte einen Tag wählen, nicht in der Zukunft."
+            elif w["datum_art"] not in ("heute", "monat", "tag", "keins"):
+                fehler = "Bitte wählen, welches Datum aufs Etikett soll."
+            elif w["preis"] and not gramm:
+                fehler = "Für den Preis brauche ich das Gewicht."
+            elif w["preis"] and (vk_preis := (app.config["VERKAUF"].tuetenpreis(art, teil, gramm)
+                                               if app.config.get("VERKAUF") else None)) is None:
+                fehler = f"Für {art} – {teil} ist kein Kilopreis hinterlegt (Mehr → Kilopreise Fleisch)."
             elif w["gramm"] and not 0 < gramm <= 50000:
                 fehler = "Das Gewicht muss zwischen 1 und 50000 Gramm liegen."
             elif w["stueckzahl"] and not 1 <= stk <= 50:
@@ -585,7 +607,10 @@ def erstelle_app(pfad, uhr=None):
                 sid = d.stueck_von_hand(art)
                 fertig = 0
                 for _ in range(anzahl):
-                    e = d.anlegen_von_hand(sid, art, teil, w["datum"], gramm or None, stk if stk > 1 else None)
+                    datum = {"monat": w["monat"] + "-01", "tag": w["datum"]}.get(w["datum_art"], heute)
+                    e = d.anlegen_von_hand(sid, art, teil, datum, gramm or None, stk if stk > 1 else None,
+                                           "tag" if w["datum_art"] == "heute" else w["datum_art"],
+                                           vk_preis if w["preis"] else None)
                     if not _drucken(e):
                         break
                     d.gedruckt(int(e["nummer"]))

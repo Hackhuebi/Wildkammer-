@@ -93,3 +93,24 @@ def test_stueckzahl_schnitzel(c):
     c.application.config["DRUCKEN"] = lambda e: e["teil_etikett"] == "5x Schnitzel"
     r = c.post("/etikett", data={"art": "Reh", "teil": "Schnitzel", "datum": "2025-12-01", "stueckzahl": "5"})
     assert "eingebucht" in r.headers["Location"]
+
+
+def test_etikett_datum_und_preis(c):
+    gedruckt = []
+    c.application.config["DRUCKEN"] = lambda e: gedruckt.append(e) or True
+    c.post("/etikett", data={"art": "Reh", "teil": "Keule", "datum_art": "monat", "monat": "2025-10"})
+    assert gedruckt[-1]["datum"] == "10/2025"
+    c.post("/etikett", data={"art": "Reh", "teil": "Keule", "datum_art": "keins"})
+    assert gedruckt[-1]["datum"] == " " and gedruckt[-1]["preis_text"] == " "
+    assert c.post("/etikett", data={"art": "Reh", "teil": "Keule", "datum_art": "monat", "monat": "2099-01"}).status_code == 200
+    # Preis: braucht Gewicht und Kilopreis
+    assert "Gewicht" in c.post("/etikett", data={"art": "Reh", "teil": "Keule", "preis": "1"}).get_data(as_text=True)
+    assert "kein Kilopreis" in c.post("/etikett", data={"art": "Reh", "teil": "Keule", "gramm": "800", "preis": "1"}).get_data(as_text=True)
+    c.application.config["VERKAUF"].fleischpreis_setzen("Reh", "Keule", "22,50")
+    r = c.post("/etikett", data={"art": "Reh Bock", "teil": "Keule", "gramm": "800", "preis": "1"})
+    assert r.status_code == 303 and gedruckt[-1]["preis_text"] == "18,00 €" and gedruckt[-1]["gewicht_text"] == "800 g"
+    # Nachdruck behält Preis und Datumsform
+    n = int(gedruckt[-1]["nummer"])
+    c.post(f"/s/{n}/drucken")
+    assert gedruckt[-1]["preis_text"] == "18,00 €"
+    assert "Eingepackt 10/2025" in c.get(f"/s/{n - 2}").get_data(as_text=True)
